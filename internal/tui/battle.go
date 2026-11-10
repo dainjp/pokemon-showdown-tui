@@ -113,7 +113,7 @@ func (bv *battleView) tagline(slot config.TaglineSlot) string {
 	if bv.owner == nil {
 		return ""
 	}
-	return bv.owner.cfg.Tagline(slot, bv.owner.cfg.TaglinesRandom)
+	return bv.tr(bv.owner.cfg.Tagline(slot, bv.owner.cfg.TaglinesRandom))
 }
 
 // wonByMe reports whether the battle winner is us.
@@ -171,6 +171,9 @@ func (bv *battleView) title() string {
 		return bv.titleText
 	}
 	if s.Tier != "" {
+		if bv.owner != nil {
+			return bv.owner.formatLabel(showdown.Format{Name: s.Tier})
+		}
 		return s.Tier
 	}
 	return bv.room
@@ -743,7 +746,8 @@ func (bv *battleView) handleOverlayKey(key string, m *Model) tea.Cmd {
 			}
 		case "backspace":
 			if len(bv.chatInput) > 0 {
-				bv.chatInput = bv.chatInput[:len(bv.chatInput)-1]
+				runes := []rune(bv.chatInput)
+				bv.chatInput = string(runes[:len(runes)-1])
 			}
 		case "space":
 			bv.chatInput += " "

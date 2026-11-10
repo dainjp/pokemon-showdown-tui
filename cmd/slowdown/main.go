@@ -58,6 +58,7 @@ func run(args []string) error {
 		noSprites   = fs.Bool("no-sprites", false, "disable sprites entirely")
 		spritesMode = fs.String("sprites", "", "sprite backend: auto|kitty|iterm2|sixel|blocks|none")
 		theme       = fs.String("theme", "", "colour theme: "+strings.Join(themeNames(), ", "))
+		language    = fs.String("lang", "", "interface language: ko or en")
 	)
 	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, "usage: slowdown [command] [flags]")
@@ -103,8 +104,12 @@ func run(args []string) error {
 		fmt.Println("pokemon slowdown", versionString())
 		return nil
 	}
+	if *language != "" && *language != "ko" && *language != "en" {
+		return fmt.Errorf("unknown language %q (use ko or en)", *language)
+	}
 
 	opts := app.Options{
+		Language:    *language,
 		Debug:       *debug,
 		NoSprites:   *noSprites,
 		SpritesMode: *spritesMode,
@@ -145,5 +150,5 @@ func run(args []string) error {
 }
 
 func themeNames() []string {
-	return []string{"zen", "dark", "light", "gameboy", "mono", "contrast"}
+	return []string{"midnight", "zen", "dark", "light", "gameboy", "mono", "contrast"}
 }

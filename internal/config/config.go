@@ -16,6 +16,8 @@ import (
 
 // Config is the on-disk configuration.
 type Config struct {
+	// Language selects the interface and reference-name language: ko or en.
+	Language string `toml:"language"`
 	// Username is the Pokémon Showdown name to log in as.
 	Username string `toml:"username"`
 	// Remember stores the password in the OS keyring so startup can log in
@@ -58,7 +60,8 @@ type Sprites struct {
 // Default returns the built-in configuration.
 func Default() Config {
 	return Config{
-		Theme:         "zen",
+		Language:      "ko",
+		Theme:         "midnight",
 		DefaultFormat: "gen9randombattle",
 		Taglines:      "canon",
 		Notifications: "bell",
@@ -112,6 +115,9 @@ func (c Config) Save(path string) error {
 // applyDefaults fills in values for keys a user left blank.
 func (c *Config) applyDefaults() {
 	d := Default()
+	if c.Language == "" {
+		c.Language = d.Language
+	}
 	if c.Theme == "" {
 		c.Theme = d.Theme
 	}
@@ -135,6 +141,11 @@ func (c *Config) applyDefaults() {
 // Validate reports configuration values that are not recognised.
 func (c Config) Validate() []string {
 	var problems []string
+	switch c.Language {
+	case "ko", "en":
+	default:
+		problems = append(problems, fmt.Sprintf("language: unknown value %q (want ko or en)", c.Language))
+	}
 	switch c.Taglines {
 	case "canon", "absurd", "off":
 	default:

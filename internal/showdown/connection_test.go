@@ -139,6 +139,39 @@ func TestClientParsesFramesOverTheWire(t *testing.T) {
 	}
 }
 
+func TestProxyLockClosurePausesAutomaticLoginButAllowsExplicitRetry(t *testing.T) {
+	srv := newWSServer(t, func(conn *websocket.Conn) {
+		_ = conn.Write(context.Background(), websocket.MessageText, []byte("|popup|Your IP is currently locked due to being a proxy."))
+		_ = conn.Close(websocket.StatusNormalClosure, "Normal closure")
+	})
+	c := NewClient(srv.url())
+	c.BackoffMin, c.BackoffMax = time.Millisecond, time.Millisecond
+	c.Start()
+	defer c.Close()
+	events := collect(t, c, func(event Event) bool {
+		_, ok := event.(AccessRestricted)
+		return ok
+	}, 3*time.Second)
+	if len(events) == 0 {
+		t.Fatal("no connection events")
+	}
+	if _, ok := events[len(events)-1].(AccessRestricted); !ok {
+		t.Fatal("server restriction was not reported")
+	}
+	<-srv.connCh
+	select {
+	case <-srv.connCh:
+		t.Fatal("proxy lock triggered another automatic authentication attempt")
+	case <-time.After(30 * time.Millisecond):
+	}
+	c.Reconnect()
+	select {
+	case <-srv.connCh:
+	case <-time.After(3 * time.Second):
+		t.Fatal("explicit retry did not reconnect")
+	}
+}
+
 // TestNoRenameWithoutPassword guards a real server behaviour: "/trn NAME" with
 // no token is refused with "Your authentication token was invalid", so sending
 // it would only produce a confusing error. With no password the client stays a

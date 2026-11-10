@@ -46,6 +46,7 @@ const (
 	screenLobby screen = iota
 	screenBattle
 	screenTeams
+	screenSettings
 )
 
 // connState is the websocket state shown in the status line.
@@ -80,12 +81,16 @@ type Model struct {
 	width, height int
 	layout        LayoutMode
 
-	screen   screen
-	conn     connState
-	username string
-	loggedIn bool
-	authErr  string
-	challstr bool
+	screen           screen
+	conn             connState
+	username         string
+	loggedIn         bool
+	authErr          string
+	challstr         bool
+	connectionNotice string
+	settingsCursor   int
+	settingsBack     screen
+	savedSpriteMode  string
 
 	formats      []showdown.Format
 	formatFilter string
@@ -159,6 +164,10 @@ func New(cfg config.Config, deps Deps) *Model {
 		sprites:        newSpriteLayer(),
 		now:            deps.Now(),
 		layout:         LayoutForSize(80, 24),
+	}
+	m.savedSpriteMode = cfg.Sprites.Mode
+	if m.savedSpriteMode == "none" || m.savedSpriteMode == "" {
+		m.savedSpriteMode = "auto"
 	}
 	return m
 }
@@ -268,7 +277,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case dexReadyMsg:
 		if msg.err != nil {
-			m.setToast("Could not load dex data: " + msg.err.Error())
+			m.setToast(m.tr("Could not load dex data: ") + msg.err.Error())
 		}
 		return m, nil
 
@@ -301,33 +310,41 @@ func (m *Model) handleShowdownEvent(ev showdown.Event) []tea.Cmd {
 	switch e := ev.(type) {
 	case showdown.Connected:
 		m.conn = connOnline
+		m.connectionNotice = ""
 		if e.Reconnected {
-			m.setToast("Reconnected.")
+			m.setToast(m.tr("Reconnected."))
 		}
 		if m.pendingSpectate != "" && m.deps.Client != nil {
 			id := m.pendingSpectate
 			m.pendingSpectate = ""
 			client := m.deps.Client
-			m.setToast("Joining " + id + "…")
+			m.setToast(m.tr("Joining ") + id + "…")
 			cmds = append(cmds, func() tea.Msg { _ = client.JoinRoom(id); return nil })
 		}
 	case showdown.Disconnected:
 		m.conn = connReconnecting
 	case showdown.Reconnecting:
 		m.conn = connReconnecting
+	case showdown.AccessRestricted:
+		m.conn = connOffline
+		m.connectionNotice = m.tr("Connection closed after a proxy-lock notice. Automatic retries paused; use : to sign in again.")
 	case showdown.ChallStr:
 		m.challstr = true
 	case showdown.AuthFailed:
 		m.authErr = e.Err.Error()
-		m.setToast("Login failed: " + e.Err.Error())
+		m.setToast(m.tr("Login failed: ") + e.Err.Error())
 	case showdown.UpdateUser:
 		m.username = e.Name
 		m.loggedIn = e.Named
 		if e.Named {
-			m.setToast("Logged in as " + e.Name)
+			m.setToast(m.tr("Logged in as ") + e.Name)
 		}
 	case showdown.Popup:
-		m.setToast(SanitizeLine(e.Message))
+		if showdown.IsProxyLockNotice(e.Message) {
+			m.connectionNotice = m.tr("Showdown reported a proxy lock for this network's IP. See pokemonshowdown.com/pages/proxyhelp.")
+		} else {
+			m.setToast(SanitizeLine(htmlToText(e.Message)))
+		}
 	case showdown.Notify:
 		title := SanitizeLine(e.Title)
 		body := SanitizeLine(e.Message)
@@ -366,7 +383,7 @@ func (m *Model) handleShowdownEvent(ev showdown.Event) []tea.Cmd {
 			m.pendingChallenge = ""
 			client := m.deps.Client
 			format := m.cfg.DefaultFormat
-			m.setToast("Challenging " + user + "…")
+			m.setToast(m.tr("Challenging ") + user + "…")
 			cmds = append(cmds, func() tea.Msg { _ = client.Challenge(user, format); return nil })
 		}
 	case showdown.SearchUpdated:
@@ -448,9 +465,9 @@ func (m *Model) afterBattleEvent(bv *battleView, wasAwaiting bool) []tea.Cmd {
 		// spam while the user is already looking at it.
 		if m.active != bv.room || m.screen != screenBattle {
 			if m.deps.Notifier != nil {
-				m.deps.Notifier.Notify("Your turn!", "Turn "+fmt.Sprint(bv.state().Turn))
+				m.deps.Notifier.Notify(m.tr("Your turn!"), m.tr("Turn ")+fmt.Sprint(bv.state().Turn))
 			}
-			m.setToast("Your turn in " + bv.title())
+			m.setToast(m.tr("Your turn in ") + bv.title())
 		}
 	}
 	cmds = append(cmds, m.loadSprites(bv)...)
@@ -482,32 +499,49 @@ func (m *Model) render() string {
 		return m.renderTooSmall()
 	}
 
+	footerRows := 1
+	if m.toast != "" {
+		footerRows++
+	}
+	if m.connectionNotice != "" {
+		footerRows++
+	}
+	bodyHeight := m.height - footerRows
 	var body string
 	switch m.screen {
 	case screenBattle:
 		if bv := m.activeBattle(); bv != nil {
-			body = bv.render(m.width, m.height-2, m.layout)
+			body = bv.render(m.width, bodyHeight, m.layout)
 		} else {
 			m.clearSprites()
-			body = m.theme.Muted.Render("No battle selected. Press esc to return to the lobby.")
+			body = m.theme.Muted.Render(m.tr("No battle selected. Press esc to return to the lobby."))
 		}
 	case screenTeams:
 		m.clearSprites()
-		body = m.renderTeams(m.width, m.height-2)
+		body = m.renderTeams(m.width, bodyHeight)
+	case screenSettings:
+		m.clearSprites()
+		body = m.renderSettings(m.width, bodyHeight)
 	default:
 		// Leaving the battle must take its sprites with it: the layer is only
 		// redrawn by the battle view, so without this the graphics linger over
 		// whatever screen comes next.
 		m.clearSprites()
-		body = m.renderLobby(m.width, m.height-2)
+		body = m.renderLobby(m.width, bodyHeight)
 	}
 
 	status := m.renderStatus()
+	if rows := lipgloss.Height(body); rows < bodyHeight {
+		body += strings.Repeat("\n", bodyHeight-rows)
+	}
 	out := body
 	// The toast gets its own line so it cannot be clipped off the end of an
 	// already-full status line.
 	if toast := m.renderToast(); toast != "" {
 		out += "\n" + toast
+	}
+	if m.connectionNotice != "" {
+		out += "\n" + m.theme.Warning.Render(truncate(m.connectionNotice, m.width))
 	}
 	out += "\n" + status
 	if m.helpOpen {
@@ -522,50 +556,70 @@ func (m *Model) render() string {
 	if m.confirm != "" {
 		out = m.overlayBox(out, m.renderConfirm())
 	}
-	return out
+	return m.theme.Canvas.Width(m.width).Height(m.height).Render(out)
 }
 
 func (m *Model) renderTooSmall() string {
-	msg := fmt.Sprintf("Terminal too small\n%d×%d (need %d×%d)\nResize to continue.",
+	msg := fmt.Sprintf(m.tr("Terminal too small\n%d×%d (need %d×%d)\nResize to continue."),
 		m.width, m.height, MinWidth, MinHeight)
 	return m.theme.Muted.Render(msg)
 }
 
 // renderStatus is the contextual status line.
 func (m *Model) renderStatus() string {
-	left := m.theme.Dim.Render("esc lobby")
-	if m.screen == screenBattle {
-		left = m.theme.Dim.Render("1-4 move  s switch  i inspect  l log  c chat  tab battle  : palette")
-		if m.layout == LayoutCompact {
-			left = m.theme.Dim.Render("1-4 move  s switch  tab battle  : palette")
-		}
-	}
-	if m.palette.open || m.helpOpen {
-		left = m.theme.Dim.Render("esc close")
-	}
-
-	conn := m.theme.Muted.Render(m.conn.label())
+	conn := m.theme.Muted.Render(m.tr(m.conn.label()))
 	if m.conn == connOnline {
-		conn = m.theme.Success.Render(m.conn.label())
+		conn = m.theme.Success.Render(m.tr(m.conn.label()))
 	} else if m.conn == connOffline {
-		conn = m.theme.Danger.Render(m.conn.label())
+		conn = m.theme.Danger.Render(m.tr(m.conn.label()))
 	} else if m.conn == connReconnecting {
-		conn = m.theme.Warning.Render(m.conn.label())
+		conn = m.theme.Warning.Render(m.tr(m.conn.label()))
 	}
 
 	name := m.username
 	nameStyle := m.theme.Muted
 	switch {
 	case name == "":
-		name = "guest"
+		name = m.tr("guest")
 	case m.loggedIn:
 		// A registered account, as opposed to a temporary guest name.
 		nameStyle = m.theme.Success
 	}
-	right := nameStyle.Render(SanitizeLine(name)) + "  " + conn
-	if len(m.searching) > 0 {
-		right = m.theme.Accent.Render("searching "+strings.Join(m.searching, ",")) + "  " + right
+	right := conn
+	if m.width >= 70 {
+		nameWidth := max(1, m.width/3-lipgloss.Width(conn)-2)
+		right = nameStyle.Render(truncate(SanitizeLine(name), nameWidth)) + "  " + conn
 	}
+	if len(m.searching) > 0 && m.width >= 100 {
+		budget := m.width/2 - lipgloss.Width(right) - 2
+		if budget >= 8 {
+			right = m.theme.Accent.Render(truncate(m.tr("searching ")+strings.Join(m.searching, ","), budget)) + "  " + right
+		}
+	}
+	available := m.width - lipgloss.Width(right) - 1
+	hints := []string{m.tr("F2 settings · : menu")}
+	switch m.screen {
+	case screenBattle:
+		hints = []string{
+			m.tr("1-4 move  s switch  i inspect  l log  c chat  tab battle  : palette"),
+			m.tr("1-4 moves · S switch · F2 settings · : menu"),
+			m.tr("1-4 moves · S switch · : menu"),
+			m.tr("1-4 move S swap : menu"),
+		}
+	case screenSettings:
+		hints = []string{m.tr("Esc back · F2 close"), m.tr("Esc back")}
+	}
+	if m.palette.open || m.helpOpen || m.prompt.open {
+		hints = []string{m.tr("esc close")}
+	}
+	leftText := "1-4 S : ?"
+	for _, hint := range hints {
+		if lipgloss.Width(hint) <= available {
+			leftText = hint
+			break
+		}
+	}
+	left := m.theme.Dim.Render(leftText)
 
 	pad := m.width - lipgloss.Width(left) - lipgloss.Width(right)
 	if pad < 1 {
@@ -578,41 +632,41 @@ func (m *Model) renderToast() string {
 	if m.toast == "" {
 		return ""
 	}
-	return m.theme.Accent.Render(" " + m.toast + " ")
+	return m.theme.Accent.Render(truncate(" "+m.toast+" ", m.width))
 }
 
 func (m *Model) renderHelp() string {
 	lines := []string{
-		m.theme.Title.Render("keyboard"),
+		m.theme.Title.Render(m.tr("keyboard")),
 		"",
-		"  1-4        choose a move",
-		"  s          switch (then 1-6, or a name)",
-		"  t          use the current mechanic (Tera/Mega/Z/Dynamax)",
-		"  i          inspect a Pokémon (↑/↓ cycles both sides and your party)",
-		"  l          battle log",
-		"  c          battle chat",
-		"  tab        switch between open battles",
-		"  enter      (after a battle) queue the same format again",
-		"  :          command palette",
-		"  ?          this help",
-		"  esc        close / back to lobby",
-		"  q          quit (asks first during a battle)",
-		"  ctrl+c     quit immediately",
+		m.tr("  1-4        choose a move"),
+		m.tr("  s          switch (then 1-6, or a name)"),
+		m.tr("  t          use the current mechanic (Tera/Mega/Z/Dynamax)"),
+		m.tr("  i          inspect a Pokémon (↑/↓ cycles both sides and your party)"),
+		m.tr("  l          battle log"),
+		m.tr("  c          battle chat"),
+		m.tr("  tab        switch between open battles"),
+		m.tr("  enter      (after a battle) queue the same format again"),
+		m.tr("  :          command palette"),
+		m.tr("  ?          this help"),
+		m.tr("  esc        close / back to lobby"),
+		m.tr("  q          quit (asks first during a battle)"),
+		m.tr("  ctrl+c     quit immediately"),
 		"",
-		m.theme.Title.Render("party tracker"),
-		"  " + m.theme.Success.Render("●") + " seen and alive     " +
-			m.theme.Dim.Render("○") + " still hidden",
-		"  " + m.theme.Primary.Render("●") + " currently active   " +
-			m.theme.Danger.Render("●") + " fainted",
+		m.theme.Title.Render(m.tr("party tracker")),
+		"  " + m.theme.Success.Render("●") + m.tr(" seen and alive     ") +
+			m.theme.Dim.Render("○") + m.tr(" still hidden"),
+		"  " + m.theme.Primary.Render("●") + m.tr(" currently active   ") +
+			m.theme.Danger.Render("●") + m.tr(" fainted"),
 		"",
-		m.theme.Muted.Render("Taglines: " + m.cfg.Tagline(config.SlotIdle, false)),
+		m.theme.Muted.Render(m.tr("Taglines: ") + m.cfg.Tagline(config.SlotIdle, false)),
 	}
 	return strings.Join(lines, "\n")
 }
 
 func (m *Model) renderConfirm() string {
 	return m.theme.Danger.Render(m.confirm) + "\n\n" +
-		m.theme.Muted.Render("enter / y to confirm   esc / n to cancel")
+		m.theme.Muted.Render(m.tr("enter / y to confirm   esc / n to cancel"))
 }
 
 // overlayBox centres a box over the current content.
@@ -726,9 +780,9 @@ func (m *Model) dismissBattle(room string) {
 	}
 	m.removeBattle(room)
 	if title != "" {
-		m.setToast("Closed " + title)
+		m.setToast(m.tr("Closed ") + title)
 	} else {
-		m.setToast("Battle closed.")
+		m.setToast(m.tr("Battle closed."))
 	}
 }
 
@@ -742,10 +796,10 @@ func (m *Model) dismissFinishedBattles() {
 		}
 	}
 	if closed == 0 {
-		m.setToast("No finished battles to close.")
+		m.setToast(m.tr("No finished battles to close."))
 		return
 	}
-	m.setToast(fmt.Sprintf("Closed %d finished battle(s).", closed))
+	m.setToast(fmt.Sprintf(m.tr("Closed %d finished battle(s)."), closed))
 }
 
 // removeBattle drops a finished battle.
@@ -776,7 +830,7 @@ func (m *Model) removeBattle(room string) {
 // got yet. Loading never blocks input: the UI shows a placeholder until the
 // spriteReadyMsg arrives.
 func (m *Model) loadSprites(bv *battleView) []tea.Cmd {
-	if m.deps.Sprites == nil || m.deps.Renderer == nil {
+	if m.cfg.Sprites.Mode == "none" || m.deps.Sprites == nil || m.deps.Renderer == nil {
 		return nil
 	}
 	var cmds []tea.Cmd
@@ -806,7 +860,7 @@ func (m *Model) loadSprites(bv *battleView) []tea.Cmd {
 // animateSprites re-renders animated sprites on the tick. It is a no-op when
 // animation is off or the active screen shows no sprites.
 func (m *Model) animateSprites() tea.Cmd {
-	if !m.cfg.Sprites.Animate || m.screen != screenBattle {
+	if m.cfg.Sprites.Mode == "none" || !m.cfg.Sprites.Animate || m.screen != screenBattle {
 		return nil
 	}
 	if !m.layout.Sprites() {

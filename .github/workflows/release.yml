@@ -24,25 +24,9 @@ jobs:
       - name: test before releasing
         run: go test ./... -timeout 300s
 
-      - name: decide whether to publish the Homebrew formula
-        id: brew
-        env:
-          # A personal access token with `repo` scope on the Homebrew tap.
-          # Without it the formula is skipped and the release still succeeds, so
-          # the first release never depends on extra setup.
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
-        run: |
-          if [ -z "${HOMEBREW_TAP_GITHUB_TOKEN}" ]; then
-            echo "::notice::HOMEBREW_TAP_GITHUB_TOKEN is not set; skipping the Homebrew formula"
-            echo "args=release --clean --skip=homebrew" >> "$GITHUB_OUTPUT"
-          else
-            echo "args=release --clean" >> "$GITHUB_OUTPUT"
-          fi
-
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: latest
-          args: ${{ steps.brew.outputs.args }}
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

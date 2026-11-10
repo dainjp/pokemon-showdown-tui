@@ -1,0 +1,315 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-10T06:29:37Z",
+  "title": "Design System: Pokémon Slowdown",
+  "extensions": {
+    "colorMeta": {
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Midnight Canvas",
+        "canonical": "#111923",
+        "tonalRamp": [
+          "oklch(15% 0.025 250)",
+          "oklch(25% 0.025 250)",
+          "oklch(35% 0.025 250)",
+          "oklch(45% 0.025 250)",
+          "oklch(55% 0.025 250)",
+          "oklch(65% 0.025 250)",
+          "oklch(80% 0.025 250)",
+          "oklch(95% 0.025 250)"
+        ]
+      },
+      "foreground": {
+        "role": "neutral",
+        "displayName": "Cool White",
+        "canonical": "#e6edf3",
+        "tonalRamp": [
+          "oklch(15% 0.01 245)",
+          "oklch(25% 0.01 245)",
+          "oklch(35% 0.01 245)",
+          "oklch(45% 0.01 245)",
+          "oklch(55% 0.01 245)",
+          "oklch(65% 0.01 245)",
+          "oklch(80% 0.01 245)",
+          "oklch(95% 0.01 245)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Slate",
+        "canonical": "#a0afbd",
+        "tonalRamp": [
+          "oklch(15% 0.03 245)",
+          "oklch(25% 0.03 245)",
+          "oklch(35% 0.03 245)",
+          "oklch(45% 0.03 245)",
+          "oklch(55% 0.03 245)",
+          "oklch(65% 0.03 245)",
+          "oklch(80% 0.03 245)",
+          "oklch(95% 0.03 245)"
+        ]
+      },
+      "dim": {
+        "role": "neutral",
+        "displayName": "Dim Steel",
+        "canonical": "#8fa2b4",
+        "tonalRamp": [
+          "oklch(15% 0.04 245)",
+          "oklch(25% 0.04 245)",
+          "oklch(35% 0.04 245)",
+          "oklch(45% 0.04 245)",
+          "oklch(55% 0.04 245)",
+          "oklch(65% 0.04 245)",
+          "oklch(80% 0.04 245)",
+          "oklch(95% 0.04 245)"
+        ]
+      },
+      "primary": {
+        "role": "primary",
+        "displayName": "Clear Teal",
+        "canonical": "#69d4c5",
+        "tonalRamp": [
+          "oklch(15% 0.12 175)",
+          "oklch(25% 0.12 175)",
+          "oklch(35% 0.12 175)",
+          "oklch(45% 0.12 175)",
+          "oklch(55% 0.12 175)",
+          "oklch(65% 0.12 175)",
+          "oklch(80% 0.12 175)",
+          "oklch(95% 0.12 175)"
+        ]
+      },
+      "accent": {
+        "role": "secondary",
+        "displayName": "Warm Amber",
+        "canonical": "#f2bb77",
+        "tonalRamp": [
+          "oklch(15% 0.12 75)",
+          "oklch(25% 0.12 75)",
+          "oklch(35% 0.12 75)",
+          "oklch(45% 0.12 75)",
+          "oklch(55% 0.12 75)",
+          "oklch(65% 0.12 75)",
+          "oklch(80% 0.12 75)",
+          "oklch(95% 0.12 75)"
+        ]
+      },
+      "danger": {
+        "role": "tertiary",
+        "displayName": "Coral Danger",
+        "canonical": "#ff8585",
+        "tonalRamp": [
+          "oklch(15% 0.17 20)",
+          "oklch(25% 0.17 20)",
+          "oklch(35% 0.17 20)",
+          "oklch(45% 0.17 20)",
+          "oklch(55% 0.17 20)",
+          "oklch(65% 0.17 20)",
+          "oklch(80% 0.17 20)",
+          "oklch(95% 0.17 20)"
+        ]
+      },
+      "success": {
+        "role": "tertiary",
+        "displayName": "Leaf Green",
+        "canonical": "#a9d87c",
+        "tonalRamp": [
+          "oklch(15% 0.15 125)",
+          "oklch(25% 0.15 125)",
+          "oklch(35% 0.15 125)",
+          "oklch(45% 0.15 125)",
+          "oklch(55% 0.15 125)",
+          "oklch(65% 0.15 125)",
+          "oklch(80% 0.15 125)",
+          "oklch(95% 0.15 125)"
+        ]
+      },
+      "warning": {
+        "role": "tertiary",
+        "displayName": "Soft Gold",
+        "canonical": "#f2ca78",
+        "tonalRamp": [
+          "oklch(15% 0.12 90)",
+          "oklch(25% 0.12 90)",
+          "oklch(35% 0.12 90)",
+          "oklch(45% 0.12 90)",
+          "oklch(55% 0.12 90)",
+          "oklch(65% 0.12 90)",
+          "oklch(80% 0.12 90)",
+          "oklch(95% 0.12 90)"
+        ]
+      },
+      "selection": {
+        "role": "neutral",
+        "displayName": "Selection Sea",
+        "canonical": "#24464b",
+        "tonalRamp": [
+          "oklch(15% 0.05 190)",
+          "oklch(25% 0.05 190)",
+          "oklch(35% 0.05 190)",
+          "oklch(45% 0.05 190)",
+          "oklch(55% 0.05 190)",
+          "oklch(65% 0.05 190)",
+          "oklch(80% 0.05 190)",
+          "oklch(95% 0.05 190)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "Terminal Title",
+        "purpose": "Bold one-row screen and overlay titles; no application-selected font family."
+      },
+      "body": {
+        "displayName": "Terminal Body",
+        "purpose": "Regular one-row battle, lobby, settings, and log copy measured in terminal cells."
+      },
+      "label": {
+        "displayName": "Terminal Label",
+        "purpose": "Muted or dim secondary labels, counts, hints, and the contextual footer."
+      },
+      "key": {
+        "displayName": "Keyboard Key",
+        "purpose": "Bold move numbers, cursors, and active keyboard affordances."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "ui-tick",
+        "value": "120ms interval",
+        "purpose": "Refreshes the Bubble Tea model and sprite animation state."
+      },
+      {
+        "name": "toast-lifetime",
+        "value": "6s",
+        "purpose": "Clears a transient toast after six seconds."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "minimum-usable",
+        "value": "32 cols x 12 rows",
+        "purpose": "Below either dimension the UI renders the resize message."
+      },
+      {
+        "name": "compact",
+        "value": "<46 cols",
+        "purpose": "Single-line battle details; sprites and field-condition bar are omitted."
+      },
+      {
+        "name": "sidecar",
+        "value": "46-69 cols",
+        "purpose": "Narrow sprite layout when vertical room permits, or the short-pane fallback."
+      },
+      {
+        "name": "standard",
+        "value": "70-99 cols",
+        "purpose": "Standard sprite/detail composition and username-capable footer."
+      },
+      {
+        "name": "cinematic",
+        "value": ">=100 cols",
+        "purpose": "Largest sprite/detail composition and optional searching status in the footer."
+      },
+      {
+        "name": "short-pane",
+        "value": "<14 rows",
+        "purpose": "Forces compact mode regardless of width."
+      },
+      {
+        "name": "sprite-short-pane",
+        "value": "<26 rows",
+        "purpose": "Downgrades a wide sprite layout to sidecar mode."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Selected Row",
+      "kind": "custom",
+      "refersTo": "selected-row",
+      "description": "A full-width terminal row with a leading cursor and selection fill for format, settings, palette, and team choices."
+    },
+    {
+      "name": "Focus Box",
+      "kind": "custom",
+      "refersTo": "focus-box",
+      "description": "A bounded, padded Lipgloss box for command palette, prompts, and battle overlays."
+    },
+    {
+      "name": "Battle Move Row",
+      "kind": "custom",
+      "refersTo": "move-row",
+      "description": "One terminal row with an amber move key, type-colored name, optional type/class detail, and right-aligned PP."
+    },
+    {
+      "name": "HP Bar",
+      "kind": "custom",
+      "refersTo": "hp-full",
+      "description": "A fixed-cell block bar that changes from success to warning to danger at the existing HP thresholds."
+    },
+    {
+      "name": "Status Footer",
+      "kind": "custom",
+      "refersTo": "status-footer",
+      "description": "A one-row contextual keyboard hint and connection status that progressively shortens at narrow widths."
+    },
+    {
+      "name": "Settings Row",
+      "kind": "custom",
+      "refersTo": "settings-row",
+      "description": "One of four auto-saving language, sprite, animation, or theme rows with a 12-cell label column."
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Battle Console",
+    "overview": "Pokémon Slowdown is a terminal-first battle console: calm enough to read between turns, direct enough to operate from the keyboard. The `midnight` theme is the default visual world, with a blue-black canvas, cool white text, a clear teal orientation signal, and a warm amber action signal. The interface is a Go/Bubble Tea terminal UI run locally on Windows, macOS, or Linux, so its geometry is measured in cells and rows rather than browser pixels.\n\nThe system keeps battle state legible through text, weight, and position as well as color. Korean and English use the same layout rules; Korean names, labels, logs, and truncation are measured by terminal display width, while player nicknames, chat, authentication values, team exports, and outbound commands remain in their original form. The other shipped themes remain selectable and keep their own palettes.",
+    "keyCharacteristics": [
+      "Cell-measured, keyboard-led composition with a one-row contextual footer.",
+      "Midnight canvas with teal orientation, amber action, and explicit status colors.",
+      "Tonal layering, selection fills, and borders provide depth; there are no shadows.",
+      "Sprite graphics are optional and responsive; text battle information remains usable without them."
+    ],
+    "rules": [
+      {
+        "name": "The Text Carries State Rule",
+        "body": "Gameplay meaning must remain present in a word, number, marker, or layout change; color reinforces status but never carries it alone.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Clear Accent Rule",
+        "body": "Use teal for orientation and focus, amber for an actionable or transient signal, and the semantic status colors only for their stated states. Do not turn every line into an accent.",
+        "section": "colors"
+      },
+      {
+        "name": "The Cell Grid Rule",
+        "body": "Never introduce a font, size, line-height, or tracking assumption that cannot be represented by the user's terminal. Preserve one-cell key alignment and the existing CJK width checks.",
+        "section": "typography"
+      },
+      {
+        "name": "The Cell-Fit Rule",
+        "body": "Every screen must fit its measured width and height, including Korean text, optional sprites, overlays, notices, and the footer. Reduce lower-priority detail before hiding an action or connection state.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat Terminal Rule",
+        "body": "Use background tone, border, and text hierarchy to separate regions. Do not add a web-style shadow, blur, gradient, or glass surface to a terminal component.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** use the midnight tokens for the default dark surface and keep all seven shipped themes available through the existing theme cycle.",
+      "**Do** reserve teal for orientation/focus and amber for action or transient attention; pair every status color with readable text, a number, or a marker.",
+      "**Do** measure Korean and English by terminal display cells, preserve UTF-8 boundaries, and leave nicknames, chat, credentials, exports, and protocol commands untouched.",
+      "**Do** keep battle actions usable when sprites are disabled or the pane falls into compact mode; preserve the connection state in the footer.",
+      "**Do** keep ANSI output and cell widths portable across local Windows, macOS, and Linux terminals."
+    ],
+    "donts": [
+      "**Don't** turn the terminal into a web surface with CSS fonts, browser pixel spacing, cards, gradients, shadows, blur, or decorative glass.",
+      "**Don't** use color as the only carrier of battle state or replace the canonical Pokémon type vocabulary with arbitrary theme colors.",
+      "**Don't** remove the existing zen, dark, light, gameboy, mono, or contrast themes to enforce midnight.",
+      "**Don't** treat the seven recorded review frames as proof of an unproxied human battle or of every Windows/macOS terminal-client path; the server's public IP is proxy-locked and those checks remain open in `PRODUCT.md` and `finish-review.md`."
+    ]
+  }
+}

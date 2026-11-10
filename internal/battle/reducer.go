@@ -697,7 +697,7 @@ func (r *Reducer) log(kind, format string, args ...any) {
 	if len(args) > 0 {
 		text = fmt.Sprintf(format, args...)
 	}
-	r.State.Log = append(r.State.Log, LogEntry{Turn: r.State.Turn, Kind: kind, Text: text})
+	r.State.Log = append(r.State.Log, LogEntry{Turn: r.State.Turn, Kind: kind, Text: text, Template: format, Args: append([]any(nil), args...)})
 	if len(r.State.Log) > maxLogEntries {
 		r.State.Log = r.State.Log[len(r.State.Log)-maxLogEntries:]
 	}

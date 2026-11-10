@@ -23,6 +23,12 @@ that request belongs with the Pokémon Showdown project, not with this client.
 
 ## Reference data
 
+The embedded Korean names in `internal/tui/names_ko.json` are derived from
+PokéAPI's CSV data at commit `5cbeb3f3eb55a9b86da52c4869336f9d61fdd6d7`.
+PokéAPI's BSD 3-Clause notice is reproduced in `docs/POKEAPI-LICENSE.txt`
+and included in binary packages. Regenerate with
+`python3 scripts/update-korean-names.py`. No PokéAPI service is required at runtime.
+
 Species and move reference data (`pokedex.json`, `moves.json`) is fetched at
 runtime from the same public server and cached locally. It is used only to
 display types, base stats, move categories and sprite identifiers.

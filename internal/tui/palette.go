@@ -26,6 +26,7 @@ type promptField struct {
 	label  string
 	secret bool
 	value  string
+	toggle bool
 }
 
 // promptState is a small multi-field form.
@@ -81,13 +82,13 @@ func (m *Model) commands() []paletteCommand {
 
 	def := FormatName(m.cfg.DefaultFormat)
 	cmds = append(cmds, paletteCommand{
-		title: "Queue " + def,
+		title: m.tr("Queue ") + def,
 		run: func(m *Model) tea.Cmd {
 			return m.queueFormat(showdown.Format{ID: m.cfg.DefaultFormat, Random: true, Searchable: true, Challengeable: true})
 		},
 	})
 	cmds = append(cmds, paletteCommand{
-		title: "Find a battle (format picker)",
+		title: m.tr("Find a battle (format picker)"),
 		run: func(m *Model) tea.Cmd {
 			m.screen = screenLobby
 			return nil
@@ -96,13 +97,13 @@ func (m *Model) commands() []paletteCommand {
 
 	if len(m.searching) > 0 {
 		cmds = append(cmds, paletteCommand{
-			title: "Cancel search",
+			title: m.tr("Cancel search"),
 			run: func(m *Model) tea.Cmd {
 				if m.deps.Client == nil {
 					return nil
 				}
 				client := m.deps.Client
-				m.setToast("Search cancelled.")
+				m.setToast(m.tr("Search cancelled."))
 				return func() tea.Msg { _ = client.CancelSearch(); return nil }
 			},
 		})
@@ -110,17 +111,17 @@ func (m *Model) commands() []paletteCommand {
 
 	if m.loggedIn {
 		cmds = append(cmds, paletteCommand{
-			title: "Sign out of " + m.username,
+			title: m.tr("Sign out of ") + m.username,
 			run:   func(m *Model) tea.Cmd { return m.logout() },
 		})
 	} else {
 		cmds = append(cmds, paletteCommand{
-			title: "Sign in to a registered account…",
+			title: m.tr("Sign in to a registered account…"),
 			run: func(m *Model) tea.Cmd {
-				m.prompt = newPrompt("login", "Sign in to Pokémon Showdown",
-					promptField{label: "Username", value: m.cfg.Username},
-					promptField{label: "Password", secret: true},
-					promptField{label: "Remember", value: "n"},
+				m.prompt = newPrompt("login", m.tr("Sign in to Pokémon Showdown"),
+					promptField{label: m.tr("Username"), value: m.cfg.Username},
+					promptField{label: m.tr("Password"), secret: true},
+					promptField{label: m.tr("Remember"), value: "n", toggle: true},
 				)
 				return nil
 			},
@@ -128,9 +129,9 @@ func (m *Model) commands() []paletteCommand {
 	}
 
 	cmds = append(cmds, paletteCommand{
-		title: "Challenge a user…",
+		title: m.tr("Challenge a user…"),
 		run: func(m *Model) tea.Cmd {
-			m.prompt = newPrompt("challenge", "Challenge a user", promptField{label: "Username"})
+			m.prompt = newPrompt("challenge", m.tr("Challenge a user"), promptField{label: m.tr("Username")})
 			return nil
 		},
 	})
@@ -144,18 +145,18 @@ func (m *Model) commands() []paletteCommand {
 		user := u
 		format := m.challengesFrom[user]
 		cmds = append(cmds, paletteCommand{
-			title: "Accept challenge from " + user + " (" + FormatName(format) + ")",
+			title: m.tr("Accept challenge from ") + user + " (" + FormatName(format) + ")",
 			run: func(m *Model) tea.Cmd {
 				if m.deps.Client == nil {
 					return nil
 				}
 				client := m.deps.Client
-				m.setToast("Accepted challenge from " + user)
+				m.setToast(m.tr("Accepted challenge from ") + user)
 				return func() tea.Msg { _ = client.AcceptChallenge(user); return nil }
 			},
 		})
 		cmds = append(cmds, paletteCommand{
-			title: "Reject challenge from " + user,
+			title: m.tr("Reject challenge from ") + user,
 			run: func(m *Model) tea.Cmd {
 				if m.deps.Client == nil {
 					return nil
@@ -174,7 +175,7 @@ func (m *Model) commands() []paletteCommand {
 			title = bv.title()
 		}
 		cmds = append(cmds, paletteCommand{
-			title: "Open battle: " + title,
+			title: m.tr("Open battle: ") + title,
 			run: func(m *Model) tea.Cmd {
 				m.openBattle(room)
 				return nil
@@ -184,70 +185,59 @@ func (m *Model) commands() []paletteCommand {
 
 	cmds = append(cmds,
 		paletteCommand{
-			title: "Teams",
+			title: m.tr("Teams"),
 			run:   func(m *Model) tea.Cmd { m.screen = screenTeams; return nil },
 		},
 		paletteCommand{
-			title: "Import team from clipboard text…",
+			title: m.tr("Import team from clipboard text…"),
 			run: func(m *Model) tea.Cmd {
-				m.prompt = newPrompt("import", "Import a team", promptField{label: "Team text"})
+				m.prompt = newPrompt("import", m.tr("Import a team"), promptField{label: m.tr("Team text")})
 				return nil
 			},
 		},
 		paletteCommand{
-			title: "Spectate a battle…",
+			title: m.tr("Spectate a battle…"),
 			run: func(m *Model) tea.Cmd {
-				m.prompt = newPrompt("spectate", "Spectate a battle", promptField{label: "Battle id"})
+				m.prompt = newPrompt("spectate", m.tr("Spectate a battle"), promptField{label: m.tr("Battle id")})
 				return nil
 			},
 		},
 	)
 
-	spriteLabel := "Toggle sprites (currently " + m.cfg.Sprites.Mode + ")"
+	spriteLabel := m.tr("Toggle sprites (currently ") + m.cfg.Sprites.Mode + ")"
 	cmds = append(cmds, paletteCommand{
 		title: spriteLabel,
-		run: func(m *Model) tea.Cmd {
-			if m.cfg.Sprites.Mode == "none" {
-				m.cfg.Sprites.Mode = "blocks"
-			} else {
-				m.cfg.Sprites.Mode = "none"
-			}
-			m.rebuildRenderer()
-			m.setToast("Sprites: " + m.cfg.Sprites.Mode)
-			return nil
-		},
+		run:   func(m *Model) tea.Cmd { return m.toggleSprites() },
 	})
 	cmds = append(cmds, paletteCommand{
-		title: fmt.Sprintf("Toggle animation (currently %v)", m.cfg.Sprites.Animate),
+		title: fmt.Sprintf(m.tr("Toggle animation (currently %v)"), m.cfg.Sprites.Animate),
 		run: func(m *Model) tea.Cmd {
 			m.cfg.Sprites.Animate = !m.cfg.Sprites.Animate
-			m.setToast(fmt.Sprintf("Animation: %v", m.cfg.Sprites.Animate))
+			m.savePreferences()
 			return nil
 		},
 	})
 	cmds = append(cmds, paletteCommand{
-		title: "Next theme",
+		title: m.tr("Next theme"),
 		run: func(m *Model) tea.Cmd {
-			m.cfg.Theme = nextTheme(m.cfg.Theme)
-			m.theme = LoadTheme(m.cfg.Theme)
-			m.setToast("Theme: " + m.cfg.Theme)
+			m.cycleTheme()
 			return nil
 		},
 	})
 	cmds = append(cmds, paletteCommand{
-		title: "Save settings",
+		title: m.tr("Save settings"),
 		run: func(m *Model) tea.Cmd {
 			if err := m.cfg.Save(""); err != nil {
-				m.setToast("Could not save settings: " + err.Error())
+				m.setToast(m.tr("Could not save settings: ") + err.Error())
 			} else {
-				m.setToast("Settings saved.")
+				m.setToast(m.tr("Settings saved."))
 			}
 			return nil
 		},
 	})
 	if bv := m.activeBattle(); bv != nil && bv.state().Ended {
 		cmds = append(cmds, paletteCommand{
-			title: "Close this finished battle",
+			title: m.tr("Close this finished battle"),
 			run: func(m *Model) tea.Cmd {
 				if bv := m.activeBattle(); bv != nil {
 					m.dismissBattle(bv.room)
@@ -258,7 +248,7 @@ func (m *Model) commands() []paletteCommand {
 	}
 	if len(m.order) > len(m.liveBattles()) {
 		cmds = append(cmds, paletteCommand{
-			title: "Close all finished battles",
+			title: m.tr("Close all finished battles"),
 			run: func(m *Model) tea.Cmd {
 				m.dismissFinishedBattles()
 				return nil
@@ -267,17 +257,22 @@ func (m *Model) commands() []paletteCommand {
 	}
 	if bv := m.activeBattle(); bv != nil && !bv.state().Ended {
 		cmds = append(cmds, paletteCommand{
-			title: "Forfeit this battle",
+			title: m.tr("Forfeit this battle"),
 			run: func(m *Model) tea.Cmd {
-				m.confirm = "Forfeit this battle?"
+				m.confirm = m.tr("Forfeit this battle?")
 				m.confirmAction = "forfeit"
 				return nil
 			},
 		})
 	}
 	cmds = append(cmds,
-		paletteCommand{title: "Keyboard help", run: func(m *Model) tea.Cmd { m.helpOpen = true; return nil }},
-		paletteCommand{title: "Quit", run: func(m *Model) tea.Cmd { return tea.Quit }},
+		paletteCommand{title: m.tr("Settings"), run: func(m *Model) tea.Cmd {
+			m.settingsBack = m.screen
+			m.screen = screenSettings
+			return nil
+		}},
+		paletteCommand{title: m.tr("Keyboard help"), run: func(m *Model) tea.Cmd { m.helpOpen = true; return nil }},
+		paletteCommand{title: m.tr("Quit"), run: func(m *Model) tea.Cmd { return tea.Quit }},
 	)
 	return cmds
 }
@@ -316,7 +311,8 @@ func (m *Model) handlePaletteKey(key string) tea.Cmd {
 		}
 	case "backspace":
 		if m.palette.filter != "" {
-			m.palette.filter = m.palette.filter[:len(m.palette.filter)-1]
+			runes := []rune(m.palette.filter)
+			m.palette.filter = string(runes[:len(runes)-1])
 			m.palette.cursor = 0
 		}
 	default:
@@ -334,21 +330,21 @@ func (m *Model) handlePaletteKey(key string) tea.Cmd {
 func (m *Model) renderPalette() string {
 	t := m.theme
 	cmds := m.filteredCommands()
-	rows := 10
+	rows := max(1, min(10, m.height-7))
 	if len(cmds) < rows {
 		rows = len(cmds)
 	}
 	var b strings.Builder
 	filter := m.palette.filter
 	if filter == "" {
-		filter = t.Dim.Render("type a command…")
+		filter = t.Dim.Render(m.tr("type a command…"))
 	} else {
 		filter = t.Fg.Render(filter) + t.Primary.Render("▌")
 	}
-	b.WriteString(t.Title.Render("Commands") + "\n")
+	b.WriteString(t.Title.Render(m.tr("Commands")) + "\n")
 	b.WriteString(t.Muted.Render(": ") + filter + "\n\n")
 	if rows == 0 {
-		b.WriteString(t.Muted.Render("  no matching command") + "\n")
+		b.WriteString(t.Muted.Render(m.tr("  no matching command")) + "\n")
 	}
 	start := 0
 	if m.palette.cursor >= rows {
@@ -356,12 +352,12 @@ func (m *Model) renderPalette() string {
 	}
 	for i := start; i < len(cmds) && i < start+rows; i++ {
 		if i == m.palette.cursor {
-			b.WriteString(t.Selected.Render("▸ "+truncate(cmds[i].title, 60)) + "\n")
+			b.WriteString(t.Selected.Render("▸ "+truncate(cmds[i].title, min(60, m.width-8))) + "\n")
 		} else {
-			b.WriteString("  " + t.Fg.Render(truncate(cmds[i].title, 60)) + "\n")
+			b.WriteString("  " + t.Fg.Render(truncate(cmds[i].title, min(60, m.width-8))) + "\n")
 		}
 	}
-	b.WriteString("\n" + t.Dim.Render("↑/↓ choose · enter run · esc close"))
+	b.WriteString("\n" + t.Dim.Render(truncate(m.tr("↑/↓ choose · enter run · esc close"), m.width-6)))
 	return t.BoxFocus.Padding(0, 2).Render(b.String())
 }
 
@@ -370,6 +366,23 @@ func (m *Model) renderPalette() string {
 // ---------------------------------------------------------------------------
 
 func (m *Model) handlePromptKey(key string) tea.Cmd {
+	if field := m.prompt.current(); field != nil && field.toggle {
+		switch strings.ToLower(key) {
+		case "y":
+			field.value = "y"
+			return nil
+		case "n", "backspace", "ctrl+u":
+			field.value = "n"
+			return nil
+		case "space", "left", "right":
+			if field.value == "y" {
+				field.value = "n"
+			} else {
+				field.value = "y"
+			}
+			return nil
+		}
+	}
 	switch key {
 	case "esc":
 		m.prompt = promptState{}
@@ -380,6 +393,18 @@ func (m *Model) handlePromptKey(key string) tea.Cmd {
 			return nil
 		}
 		return m.submitPrompt()
+	case "tab", "down":
+		if len(m.prompt.fields) > 0 {
+			m.prompt.index = (m.prompt.index + 1) % len(m.prompt.fields)
+		}
+	case "shift+tab", "up":
+		if len(m.prompt.fields) > 0 {
+			m.prompt.index = (m.prompt.index + len(m.prompt.fields) - 1) % len(m.prompt.fields)
+		}
+	case "ctrl+u":
+		if field := m.prompt.current(); field != nil {
+			field.value = ""
+		}
 	case "backspace":
 		if f := m.prompt.current(); f != nil && len(f.value) > 0 {
 			r := []rune(f.value)
@@ -391,6 +416,9 @@ func (m *Model) handlePromptKey(key string) tea.Cmd {
 		}
 	default:
 		if f := m.prompt.current(); f != nil {
+			if f.toggle {
+				return nil
+			}
 			if r := printable(key); r != 0 {
 				f.value += string(r)
 			}
@@ -423,13 +451,13 @@ func (m *Model) submitLogin(p promptState) tea.Cmd {
 	remember := strings.EqualFold(strings.TrimSpace(p.value(2)), "y")
 
 	if username == "" {
-		m.setToast("Enter a username.")
+		m.setToast(m.tr("Enter a username."))
 		return nil
 	}
 	if password == "" {
 		// The server will not accept a name without an assertion, so there is
 		// nothing useful to do without a password.
-		m.setToast("Enter your password. (Guest names are assigned by the server.)")
+		m.setToast(m.tr("Enter your password. (Guest names are assigned by the server.)"))
 		return nil
 	}
 
@@ -438,12 +466,12 @@ func (m *Model) submitLogin(p promptState) tea.Cmd {
 	m.cfg.Username = username
 	m.cfg.Remember = remember && password != ""
 	if err := m.cfg.Save(""); err != nil {
-		m.setToast("Could not save settings: " + err.Error())
+		m.setToast(m.tr("Could not save settings: ") + err.Error())
 	}
 
 	if m.cfg.Remember {
 		if err := m.deps.StorePassword(username, password); err != nil {
-			m.setToast("Could not store the password in your keychain; you will need to sign in again next time.")
+			m.setToast(m.tr("Could not store the password in your keychain; you will need to sign in again next time."))
 		}
 	} else {
 		_ = m.deps.DeletePassword(username)
@@ -457,7 +485,7 @@ func (m *Model) submitLogin(p promptState) tea.Cmd {
 	if password == "" {
 		m.setToast("Signing in as guest " + username + "…")
 	} else {
-		m.setToast("Signing in as " + username + "…")
+		m.setToast(m.tr("Signing in as ") + username + "…")
 	}
 	return nil
 }
@@ -468,7 +496,7 @@ func (m *Model) submitChallenge(user string) tea.Cmd {
 	}
 	client := m.deps.Client
 	format := m.cfg.DefaultFormat
-	m.setToast("Challenging " + user + "…")
+	m.setToast(m.tr("Challenging ") + user + "…")
 	return func() tea.Msg { _ = client.Challenge(user, format); return nil }
 }
 
@@ -479,19 +507,19 @@ func (m *Model) submitImport(text string) tea.Cmd {
 	}
 	team, err := teams.ParseExport(text)
 	if err != nil {
-		m.setToast("Could not parse team: " + err.Error())
+		m.setToast(m.tr("Could not parse team: ") + err.Error())
 		return nil
 	}
 	if m.deps.Teams == nil {
-		m.setToast("Team storage unavailable.")
+		m.setToast(m.tr("Team storage unavailable."))
 		return nil
 	}
 	team.Name = "Imported " + team.Pokemon[0].Display()
 	if err := m.deps.Teams.Add(team); err != nil {
-		m.setToast("Could not save team: " + err.Error())
+		m.setToast(m.tr("Could not save team: ") + err.Error())
 		return nil
 	}
-	m.setToast(fmt.Sprintf("Imported %d Pokémon.", len(team.Pokemon)))
+	m.setToast(fmt.Sprintf(m.tr("Imported %d Pokémon."), len(team.Pokemon)))
 	m.screen = screenTeams
 	return nil
 }
@@ -502,11 +530,11 @@ func (m *Model) submitSpectate(input string) tea.Cmd {
 	}
 	id := battleIDFromInput(input)
 	if id == "" {
-		m.setToast("Could not read a battle id from that.")
+		m.setToast(m.tr("Could not read a battle id from that."))
 		return nil
 	}
 	client := m.deps.Client
-	m.setToast("Joining " + id + "…")
+	m.setToast(m.tr("Joining ") + id + "…")
 	return func() tea.Msg { _ = client.JoinRoom(id); return nil }
 }
 
@@ -516,7 +544,7 @@ func (m *Model) logout() tea.Cmd {
 	m.cfg.Username = ""
 	m.cfg.Remember = false
 	if err := m.cfg.Save(""); err != nil {
-		m.setToast("Could not save settings: " + err.Error())
+		m.setToast(m.tr("Could not save settings: ") + err.Error())
 	}
 	if user != "" {
 		_ = m.deps.DeletePassword(user)
@@ -528,32 +556,36 @@ func (m *Model) logout() tea.Cmd {
 	}
 	m.username = ""
 	m.loggedIn = false
-	m.setToast("Signed out.")
+	m.setToast(m.tr("Signed out."))
 	return nil
 }
 
 func (m *Model) renderPrompt() string {
 	t := m.theme
 	var b strings.Builder
-	b.WriteString(t.Title.Render(m.prompt.title) + "\n\n")
+	b.WriteString(t.Title.Render(truncate(m.prompt.title, m.width-6)) + "\n\n")
 
 	for i, f := range m.prompt.fields {
 		label := padRight(f.label, 12)
+		value := f.masked()
+		if f.toggle {
+			value = m.onOff(f.value == "y") + " [Y/N]"
+		}
 		if i == m.prompt.index {
 			b.WriteString("  " + t.Muted.Render(label) +
-				t.Fg.Render(truncate(f.masked(), 40)) + t.Primary.Render("▌") + "\n")
+				t.Fg.Render(truncate(value, min(40, m.width-22))) + t.Primary.Render("▌") + "\n")
 			continue
 		}
 		// Completed fields stay visible but dimmed. Secret values stay masked
 		// even after they are entered.
-		b.WriteString("  " + t.Dim.Render(label+truncate(f.masked(), 40)) + "\n")
+		b.WriteString("  " + t.Dim.Render(label+truncate(value, min(40, m.width-22))) + "\n")
 	}
 
-	hint := "enter next · esc cancel"
+	hint := m.tr("enter next · esc cancel")
 	if m.prompt.index == len(m.prompt.fields)-1 {
-		hint = "enter confirm · esc cancel"
+		hint = m.tr("enter confirm · esc cancel")
 	}
-	b.WriteString("\n" + t.Dim.Render(hint))
+	b.WriteString("\n" + t.Dim.Render(truncate(hint, m.width-6)))
 	return t.BoxFocus.Padding(0, 2).Render(b.String())
 }
 
@@ -586,18 +618,24 @@ func nextTheme(current string) string {
 }
 
 // rebuildRenderer swaps the sprite backend after a settings change.
-func (m *Model) rebuildRenderer() {
-	if m.deps.Sprites == nil {
-		return
-	}
+func (m *Model) rebuildRenderer() error {
 	r, err := sprites.NewRenderer(sprites.ParseMode(m.cfg.Sprites.Mode), nil)
 	if err != nil {
-		return
+		return err
 	}
+	previous := m.deps.Renderer
+	m.clearSprites()
 	m.deps.Renderer = r
 	for _, bv := range m.battles {
+		bv.deps.Renderer = r
 		bv.spriteRendered = map[string]string{}
+		bv.spritePayload = map[string]string{}
+		bv.spriteFrames = map[string]int{}
 	}
+	if previous != nil {
+		_ = previous.Close()
+	}
+	return nil
 }
 
 // FormatName renders a human-readable name for a format id, preferring the

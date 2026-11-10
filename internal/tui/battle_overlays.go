@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/unnipv/pokemon-slowdown/internal/battle"
 	"strconv"
 )
@@ -67,6 +68,12 @@ func (bv *battleView) overlayFrame(title string, width int, body []string) strin
 	if width > 78 {
 		width = 78
 	}
+	inner := width - 6
+	var wrapped []string
+	for _, line := range body {
+		wrapped = append(wrapped, strings.Split(ansi.Wrap(line, inner, ""), "\n")...)
+	}
+	body = wrapped
 
 	// The box is len(body) + 6 lines tall: a title, a blank, the body, a blank,
 	// the hint, and two borders. Trim the body so the bottom border is never
@@ -81,15 +88,14 @@ func (bv *battleView) overlayFrame(title string, width int, body []string) strin
 	if len(body) > maxBody {
 		trimmed := append([]string{}, body[:maxBody-1]...)
 		trimmed = append(trimmed, bv.theme.Dim.Render(
-			fmt.Sprintf("… %d more lines", len(body)-(maxBody-1))))
+			fmt.Sprintf(bv.tr("… %d more lines"), len(body)-(maxBody-1))))
 		body = trimmed
 	}
-	inner := width - 6
 	t := bv.theme
 	head := t.Title.Render(title)
 	lines := []string{head, ""}
 	lines = append(lines, body...)
-	lines = append(lines, "", t.Dim.Render("esc close"))
+	lines = append(lines, "", t.Dim.Render(bv.tr("esc close")))
 	content := strings.Join(lines, "\n")
 	return t.BoxFocus.Width(inner).Padding(0, 2).Render(content)
 }
@@ -123,7 +129,7 @@ func (bv *battleView) renderSwitchOverlay(width int) string {
 	t := bv.theme
 	opts := bv.switchOptions()
 	if len(opts) == 0 {
-		return bv.overlayFrame("Switch", width, []string{t.Muted.Render("No party information yet.")})
+		return bv.overlayFrame(bv.tr("Switch"), width, []string{t.Muted.Render(bv.tr("No party information yet."))})
 	}
 
 	nameW := 16
@@ -139,19 +145,19 @@ func (bv *battleView) renderSwitchOverlay(width int) string {
 			cursor = t.Accent.Render("> ")
 		}
 
-		name := SanitizeLine(p.Name)
+		name := bv.pokemonName(p)
 		if g := genderGlyph(p.Gender); g != "" {
 			name += " " + g
 		}
 		padded := padRight(name, nameW)
 
 		if !o.Legal {
-			reason := "unavailable"
+			reason := bv.tr("unavailable")
 			switch {
 			case p.Fainted:
-				reason = "fainted"
+				reason = bv.tr("fainted")
 			case p.Active:
-				reason = "in battle"
+				reason = bv.tr("in battle")
 			}
 			body = append(body, t.Disabled.Render(
 				fmt.Sprintf("  [%d] %s %s", o.Index, padded, reason)))
@@ -168,8 +174,8 @@ func (bv *battleView) renderSwitchOverlay(width int) string {
 		}
 		body = append(body, line)
 	}
-	body = append(body, "", t.Dim.Render("enter choose  ·  i inspect"))
-	return bv.overlayFrame("Switch", width, body)
+	body = append(body, "", t.Dim.Render(bv.tr("enter choose  ·  i inspect")))
+	return bv.overlayFrame(bv.tr("Switch"), width, body)
 }
 
 // inspectables returns the Pokémon the inspect overlay cycles through: the
@@ -222,7 +228,7 @@ func (bv *battleView) renderInspectOverlay(width int) string {
 	t := bv.theme
 	list := bv.inspectables()
 	if len(list) == 0 {
-		return bv.overlayFrame("Inspect", width, []string{t.Muted.Render("Nothing to inspect.")})
+		return bv.overlayFrame(bv.tr("Inspect"), width, []string{t.Muted.Render(bv.tr("Nothing to inspect."))})
 	}
 	if bv.inspectIndex >= len(list) {
 		bv.inspectIndex = 0
@@ -230,7 +236,7 @@ func (bv *battleView) renderInspectOverlay(width int) string {
 	p := list[bv.inspectIndex]
 	mine := bv.isMine(p)
 
-	title := SanitizeLine(p.Name)
+	title := bv.pokemonName(p)
 	if g := genderGlyph(p.Gender); g != "" {
 		title += " " + g
 	}
@@ -240,34 +246,34 @@ func (bv *battleView) renderInspectOverlay(width int) string {
 
 	body := []string{t.Fg.Bold(true).Render(title)}
 	if len(list) > 1 {
-		body = append(body, t.Dim.Render(fmt.Sprintf("  %d of %d  ·  ↑/↓ to cycle",
+		body = append(body, t.Dim.Render(fmt.Sprintf(bv.tr("  %d of %d  ·  ↑/↓ to cycle"),
 			bv.inspectIndex+1, len(list))))
 	}
 	body = append(body, "")
 
 	body = append(body, fmt.Sprintf("HP       %s %s", bv.hpBar(p.HPPercent, 12), bv.hpText(p, !mine)))
-	body = append(body, fmt.Sprintf("Status   %s", orDash(bv.statusBadge(p.Status))))
+	body = append(body, fmt.Sprintf(bv.tr("Status   %s"), orDash(bv.statusBadge(p.Status))))
 	if p.Level > 0 {
-		body = append(body, fmt.Sprintf("Level    %d", p.Level))
+		body = append(body, fmt.Sprintf(bv.tr("Level    %d"), p.Level))
 	}
 	if p.Terastallized {
-		body = append(body, "Tera     "+t.Primary.Render(p.TeraType))
+		body = append(body, bv.tr("Tera     ")+t.Primary.Render(bv.name("type", p.TeraType)))
 	}
 	if b := bv.boostText(p); b != "" {
-		body = append(body, "Boosts   "+b)
+		body = append(body, bv.tr("Boosts   ")+b)
 	}
 	if p.Item != "" {
-		body = append(body, "Item     "+t.Muted.Render(p.Item))
+		body = append(body, bv.tr("Item     ")+t.Muted.Render(bv.name("item", p.Item)))
 	} else if !mine {
-		body = append(body, "Item     "+t.Dim.Render("? (not revealed)"))
+		body = append(body, bv.tr("Item     ")+t.Dim.Render(bv.tr("? (not revealed)")))
 	}
 	if p.Ability != "" {
-		body = append(body, "Ability  "+t.Muted.Render(p.Ability))
+		body = append(body, bv.tr("Ability  ")+t.Muted.Render(bv.name("ability", p.Ability)))
 	} else if !mine {
 		if poss := bv.possibleAbilities(p.Species); poss != "" {
-			body = append(body, "Ability  "+t.Muted.Render("?")+" ("+poss+")")
+			body = append(body, bv.tr("Ability  ")+t.Muted.Render("?")+" ("+poss+")")
 		} else {
-			body = append(body, "Ability  "+t.Dim.Render("? (not revealed)"))
+			body = append(body, bv.tr("Ability  ")+t.Dim.Render(bv.tr("? (not revealed)")))
 		}
 	}
 
@@ -276,16 +282,16 @@ func (bv *battleView) renderInspectOverlay(width int) string {
 	body = append(body, "")
 
 	if mine {
-		body = append(body, t.Muted.Render("Moves"))
+		body = append(body, t.Muted.Render(bv.tr("Moves")))
 		switch {
 		case len(p.Moves) > 0:
 			for _, mv := range p.Moves {
-				line := "  " + padRight(SanitizeLine(mv.Name), 16) + " " + bv.moveDetail(mv.ID)
+				line := "  " + padRight(SanitizeLine(bv.name("move", mv.Name)), 16) + " " + bv.moveDetail(mv.ID)
 				if mv.MaxPP > 0 {
 					line += "  " + t.Muted.Render(fmt.Sprintf("%d/%d", mv.PP, mv.MaxPP))
 				}
 				if mv.Disabled {
-					line += "  " + t.Disabled.Render("disabled")
+					line += "  " + t.Disabled.Render(bv.tr("disabled"))
 				}
 				body = append(body, line)
 			}
@@ -295,21 +301,21 @@ func (bv *battleView) renderInspectOverlay(width int) string {
 			for _, id := range p.MoveIDs {
 				body = append(body, "  "+padRight(bv.moveName(id), 16)+" "+bv.moveDetail(id))
 			}
-			body = append(body, t.Dim.Render("  PP shown while active"))
+			body = append(body, t.Dim.Render(bv.tr("  PP shown while active")))
 		default:
-			body = append(body, t.Dim.Render("  (not yet known)"))
+			body = append(body, t.Dim.Render(bv.tr("  (not yet known)")))
 		}
 	} else {
-		body = append(body, t.Muted.Render(fmt.Sprintf("Revealed moves (%d)", len(p.SeenMoves))))
+		body = append(body, t.Muted.Render(fmt.Sprintf(bv.tr("Revealed moves (%d)"), len(p.SeenMoves))))
 		if len(p.SeenMoves) == 0 {
-			body = append(body, t.Dim.Render("  none seen yet"))
+			body = append(body, t.Dim.Render(bv.tr("  none seen yet")))
 		}
 		for _, m := range p.SeenMoves {
-			body = append(body, "  "+t.Fg.Render(m))
+			body = append(body, "  "+t.Fg.Render(bv.name("move", m)))
 		}
-		body = append(body, "", t.Dim.Render("Only what the battle has revealed is shown."))
+		body = append(body, "", t.Dim.Render(bv.tr("Only what the battle has revealed is shown.")))
 	}
-	return bv.overlayFrame("Inspect", width, body)
+	return bv.overlayFrame(bv.tr("Inspect"), width, body)
 }
 
 // renderStatTable shows base stats from the dex, the absolute current stats the
@@ -328,11 +334,11 @@ func (bv *battleView) renderStatTable(p *battle.Pokemon, mine bool) []string {
 		return bv.renderFoeStatTable(p, base)
 	}
 
-	head := "  " + padRight("Stat", 8) + " " + padLeft("Base", 5) + " " + padLeft("Actual", 7) + " " + padLeft("In battle", 11)
+	head := "  " + padRight(bv.tr("Stat"), 8) + " " + padLeft(bv.tr("Base"), 5) + " " + padLeft(bv.tr("Actual"), 7) + " " + padLeft(bv.tr("In battle"), 11)
 	out := []string{t.Muted.Render(head)}
 
 	for _, k := range battle.StatKeys {
-		label := battle.StatLabels[k]
+		label := bv.tr(battle.StatLabels[k])
 		if label == "" {
 			label = k
 		}
@@ -387,11 +393,11 @@ func (bv *battleView) renderStatTable(p *battle.Pokemon, mine bool) []string {
 func (bv *battleView) renderFoeStatTable(p *battle.Pokemon, base map[string]int) []string {
 	t := bv.theme
 	random := strings.Contains(bv.state().Tier, "Random")
-	head := "  " + padRight("Stat", 8) + " " + padLeft("Base", 5) + " " + padLeft("Min", 5) + " " + padLeft("Max", 5)
+	head := "  " + padRight(bv.tr("Stat"), 8) + " " + padLeft(bv.tr("Base"), 5) + " " + padLeft(bv.tr("Min"), 5) + " " + padLeft(bv.tr("Max"), 5)
 	out := []string{t.Muted.Render(head)}
 
 	for _, k := range battle.StatKeys {
-		label := battle.StatLabels[k]
+		label := bv.tr(battle.StatLabels[k])
 		if label == "" {
 			label = k
 		}
@@ -404,7 +410,7 @@ func (bv *battleView) renderFoeStatTable(p *battle.Pokemon, base map[string]int)
 		out = append(out, "  "+padRight(label, 8)+" "+
 			padLeft(baseVal, 5)+" "+padLeft(minVal, 5)+" "+padLeft(maxVal, 5))
 	}
-	out = append(out, "", t.Dim.Render("  Possible range, before items, abilities and boosts."))
+	out = append(out, "", t.Dim.Render(bv.tr("  Possible range, before items, abilities and boosts.")))
 	return out
 }
 
@@ -418,10 +424,10 @@ func (bv *battleView) isMine(p *battle.Pokemon) bool {
 func (bv *battleView) moveName(id string) string {
 	if bv.deps.Dex != nil {
 		if m, ok := bv.deps.Dex.Move(id); ok && m.Name != "" {
-			return m.Name
+			return bv.name("move", m.Name)
 		}
 	}
-	return id
+	return bv.name("move", id)
 }
 
 // moveDetail renders a move's type, damage class and base power, so a moveset
@@ -440,11 +446,11 @@ func (bv *battleView) moveDetail(id string) string {
 	}
 	switch strings.ToLower(m.Category) {
 	case "physical":
-		parts = append(parts, bv.theme.Warning.Render("Phys"))
+		parts = append(parts, bv.theme.Warning.Render(bv.tr("Phys")))
 	case "special":
-		parts = append(parts, bv.theme.Primary.Render("Spec"))
+		parts = append(parts, bv.theme.Primary.Render(bv.tr("Spec")))
 	default:
-		parts = append(parts, bv.theme.Muted.Render("Status"))
+		parts = append(parts, bv.theme.Muted.Render(bv.tr("Status move")))
 	}
 	if m.BasePower > 0 {
 		parts = append(parts, bv.theme.Muted.Render(strconv.Itoa(m.BasePower)))
@@ -466,7 +472,7 @@ func (bv *battleView) possibleAbilities(species string) string {
 	var out []string
 	for _, key := range []string{"0", "1", "H", "S"} {
 		if a, ok := sp.Abilities[key]; ok && a != "" {
-			out = append(out, a)
+			out = append(out, bv.name("ability", a))
 		}
 	}
 	return strings.Join(out, ", ")
@@ -489,15 +495,15 @@ func (bv *battleView) renderLogOverlay(width, height int) string {
 		body = append(body, bv.styleLogLine(e))
 	}
 	if len(body) == 0 {
-		body = append(body, t.Muted.Render("(nothing yet)"))
+		body = append(body, t.Muted.Render(bv.tr("(nothing yet)")))
 	}
-	body = append(body, "", t.Dim.Render("↑/↓ scroll"))
-	return bv.overlayFrame("Battle log", width, body)
+	body = append(body, "", t.Dim.Render(bv.tr("↑/↓ scroll")))
+	return bv.overlayFrame(bv.tr("Battle log"), width, body)
 }
 
 func (bv *battleView) styleLogLine(e battle.LogEntry) string {
 	t := bv.theme
-	text := SanitizeLine(e.Text)
+	text := SanitizeLine(bv.logText(e))
 	if text == "" {
 		return ""
 	}
@@ -550,10 +556,10 @@ func (bv *battleView) renderChatOverlay(width, height int) string {
 		}
 	}
 	if len(body) == 0 {
-		body = append(body, t.Muted.Render("(no messages)"))
+		body = append(body, t.Muted.Render(bv.tr("(no messages)")))
 	}
 	body = append(body, "", t.Accent.Render("› ")+t.Fg.Render(bv.chatInput)+t.Primary.Render("▌"))
-	return bv.overlayFrame("Chat", width, body)
+	return bv.overlayFrame(bv.tr("Chat"), width, body)
 }
 
 func (bv *battleView) renderTargetOverlay(width int) string {
@@ -566,15 +572,15 @@ func (bv *battleView) renderTargetOverlay(width int) string {
 			cursor = t.Accent.Render("> ")
 		}
 		label := bv.targetLabel(opt)
-		side := "ally"
+		side := bv.tr("ally")
 		if opt.Foe {
-			side = "foe"
+			side = bv.tr("foe")
 		}
 		line := fmt.Sprintf("%s[%d] %s  %s", cursor, i+1, t.Fg.Render(label), t.Muted.Render(side))
 		body = append(body, line)
 	}
 	_ = s
-	return bv.overlayFrame("Choose a target", width, body)
+	return bv.overlayFrame(bv.tr("Choose a target"), width, body)
 }
 
 func (bv *battleView) targetLabel(opt battle.TargetOption) string {
@@ -587,7 +593,7 @@ func (bv *battleView) targetLabel(opt battle.TargetOption) string {
 	}
 	if side != nil {
 		if p := side.ActiveAt(opt.Slot); p != nil {
-			return SanitizeLine(p.Name)
+			return bv.pokemonName(p)
 		}
 	}
 	return opt.Spec

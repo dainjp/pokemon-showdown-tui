@@ -57,9 +57,13 @@ type State struct {
 
 // LogEntry is one human-readable line of battle history.
 type LogEntry struct {
-	Turn int
-	Kind string
-	Text string
+	// Template and Args keep client-generated messages translatable without
+	// translating player chat or changing the English replay text.
+	Template string
+	Args     []any
+	Turn     int
+	Kind     string
+	Text     string
 }
 
 // Side is one player's half of the field.

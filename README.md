@@ -1,4 +1,20 @@
-# pokemon slowdown
+# Pokémon Showdown TUI
+
+**Windows·Mac 로컬 PC 설치:** [한국어 설치 가이드](README.ko.md)
+· [실행 파일 다운로드](https://github.com/dainjp/pokemon-showdown-tui/releases/tag/v0.3.0-ko.1)
+
+기존 Pokémon Showdown 서버에서 사람과 대전하는 터미널 클라이언트입니다.
+한국어, `F2` 설정, 스프라이트 ON/OFF, 차분한 `midnight` 테마를 추가했습니다.
+첫 테스트는 로컬 PC에서 `slowdown --no-sprites`로 시작하세요.
+이 저장소는 비공개이므로 다운로드하려면 접근 권한이 있는 GitHub 계정으로 로그인해야 합니다.
+
+This is [dainjp's personal fork](https://github.com/dainjp/pokemon-showdown-tui)
+of [unnipv/pokemon-slowdown](https://github.com/unnipv/pokemon-slowdown).
+It adds a Korean/English interface, an automatically saved **F2 settings**
+screen, a midnight theme, Korean reference names and common battle messages,
+and a clear paused state when the server closes a proxy-locked connection.
+See [한국어 설치 가이드](README.ko.md) for local Windows/macOS setup and customization.
+Use `slowdown --lang en` to start in English.
 
 A terminal client (TUI) for [Pokémon Showdown](https://pokemonshowdown.com),
 written in Go. It plays ladder and challenge battles — Random Battle, singles
@@ -16,7 +32,8 @@ A short demo of a battle from the terminal.
 
 ## Screenshots
 
-From a real session, Ghostty, half-block sprite backend.
+Upstream screenshots from a real session, Ghostty, half-block sprite backend.
+These show the original English interface.
 
 ![Battle screen](docs/screenshot-battle.png)
 
@@ -27,25 +44,39 @@ From a real session, Ghostty, half-block sprite backend.
 
 ## Install
 
-### Homebrew
+### Build this fork
 
 ```sh
-brew install unnipv/tap/pokemon-slowdown
+go build -o slowdown ./cmd/slowdown
 ```
 
-### Go
+Requires Go 1.27.1 or newer. Run this from the personalized source checkout.
+The module path is retained for upstream compatibility; installing the upstream
+Homebrew formula or Go module installs the original client instead of this fork.
+
+### Prebuilt binaries
+
+Download the archive for your PC from
+[v0.3.0-ko.1](https://github.com/dainjp/pokemon-showdown-tui/releases/tag/v0.3.0-ko.1)
+and extract it. No Go installation is needed for these binaries.
+Run in a local terminal, outside any SSH session:
+
+```powershell
+# Windows PowerShell, in the extracted folder
+.\slowdown.exe --no-sprites
+```
 
 ```sh
-go install github.com/unnipv/pokemon-slowdown/cmd/slowdown@latest
+# macOS / Linux, in the extracted folder
+./slowdown --no-sprites
 ```
 
-Requires Go 1.27 or newer.
-
-### Release binaries
-
-Download the archive for your platform from the
-[releases page](https://github.com/unnipv/pokemon-slowdown/releases). Checksums
-are published as `checksums.txt` alongside each release.
+The Ubuntu development server receives a proxy-lock notice and its raw
+connection closes after authentication. Automatic retries now pause after that
+sequence; persistent account login is still unverified. A local-PC test will
+check whether a different network changes that behavior. The client cannot
+remove a server-side lock. See the
+[official proxy-lock guide](https://pokemonshowdown.com/pages/proxyhelp).
 
 ## Usage
 
@@ -64,9 +95,10 @@ slowdown --version
 | Flag | Description |
 | --- | --- |
 | `--debug` | write protocol events to a log file |
+| `--lang <language>` | `ko` (default), `en` |
 | `--no-sprites` | disable sprites |
 | `--sprites <mode>` | `auto`, `kitty`, `iterm2`, `sixel`, `blocks`, `none` |
-| `--theme <name>` | `zen`, `dark`, `light`, `gameboy`, `mono`, `contrast` |
+| `--theme <name>` | `midnight` (default), `zen`, `dark`, `light`, `gameboy`, `mono`, `contrast` |
 
 ## Signing in
 
@@ -232,8 +264,8 @@ backend, and every config, cache and data path.
 ## Development
 
 ```sh
-git clone https://github.com/unnipv/pokemon-slowdown
-cd pokemon-slowdown
+git clone https://github.com/dainjp/pokemon-showdown-tui.git
+cd pokemon-showdown-tui
 
 make build      # -> ./slowdown
 make run        # build and open the lobby

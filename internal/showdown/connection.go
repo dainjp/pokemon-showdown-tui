@@ -3,6 +3,7 @@ package showdown
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -33,6 +34,16 @@ type Reconnecting struct {
 	Base
 	Attempt int
 	Delay   time.Duration
+}
+
+// AccessRestricted means the server closed a connection after a proxy-lock
+// notice. Automatic authentication pauses until the user explicitly retries.
+type AccessRestricted struct{ Base }
+
+var errAccessRestricted = errors.New("showdown: proxy-locked connection closed")
+
+func IsProxyLockNotice(message string) bool {
+	return strings.Contains(strings.ToLower(message), "locked due to being a proxy")
 }
 
 // Credentials are the login details a Client should use. An empty Password
@@ -183,6 +194,16 @@ func (c *Client) run() {
 		if c.isClosed() {
 			return
 		}
+		if errors.Is(err, errAccessRestricted) {
+			c.emit(AccessRestricted{})
+			select {
+			case <-c.wake:
+				attempt = 0
+				continue
+			case <-c.done:
+				return
+			}
+		}
 		attempt++
 		delay := backoff(attempt, c.BackoffMin, c.BackoffMax)
 		c.emit(Reconnecting{Attempt: attempt, Delay: delay})
@@ -229,9 +250,13 @@ func (c *Client) connectAndRead() error {
 		_ = conn.CloseNow()
 	}()
 
+	proxyLocked := false
 	for {
 		_, data, err := conn.Read(context.Background())
 		if err != nil {
+			if proxyLocked && websocket.CloseStatus(err) == websocket.StatusNormalClosure {
+				return errAccessRestricted
+			}
 			if !c.isClosed() {
 				c.emit(Disconnected{Err: err})
 			}
@@ -239,6 +264,9 @@ func (c *Client) connectAndRead() error {
 		}
 		for _, frame := range SplitFrames(string(data)) {
 			for _, ev := range Parse(frame) {
+				if popup, ok := ev.(Popup); ok && IsProxyLockNotice(popup.Message) {
+					proxyLocked = true
+				}
 				if cs, ok := ev.(ChallStr); ok {
 					c.mu.Lock()
 					c.challstr = cs.Challstr

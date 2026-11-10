@@ -28,6 +28,8 @@ import (
 
 // Options are the resolved command-line options.
 type Options struct {
+	// Language overrides the saved interface language.
+	Language string
 	// Format, when set, starts a ladder search as soon as the client is ready.
 	Format string
 	// Spectate joins a battle room as a spectator.
@@ -135,17 +137,12 @@ func Run(opts Options) error {
 	// With a pixel backend, sprites are drawn out of band: Bubble Tea strips
 	// graphics escapes from view content, so the layer rewrites sentinel runes
 	// in the output stream instead.
-	var progOpts []tea.ProgramOption
-	if sprites.SupportsPayload(renderer) {
-		progOpts = append(progOpts, tea.WithOutput(model.SpriteWriter(os.Stdout)))
-	}
-	program := tea.NewProgram(model, progOpts...)
+	program := tea.NewProgram(model, tea.WithOutput(model.SpriteWriter(os.Stdout)))
 
 	// Restore the terminal on every exit path, including panics.
 	cleanup := func() {
-		sprites.Cleanup(os.Stdout, renderer.Capabilities())
+		model.Cleanup(os.Stdout)
 		client.Close()
-		_ = renderer.Close()
 	}
 	defer func() {
 		if r := recover(); r != nil {
@@ -168,6 +165,9 @@ func Run(opts Options) error {
 }
 
 func applyOverrides(cfg *config.Config, opts Options) {
+	if opts.Language != "" {
+		cfg.Language = opts.Language
+	}
 	if opts.Debug {
 		cfg.Debug = true
 	}

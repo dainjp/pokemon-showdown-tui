@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/sahilm/fuzzy"
 
 	"github.com/unnipv/pokemon-slowdown/internal/showdown"
@@ -16,6 +17,9 @@ import (
 // handleKey routes a key press for the whole application.
 func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
+	if key == "ctrl+c" {
+		return m, tea.Quit
+	}
 
 	if m.palette.open {
 		return m, m.handlePaletteKey(key)
@@ -34,6 +38,14 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch key {
+	case "f2":
+		if m.screen == screenSettings {
+			m.screen = m.settingsBack
+		} else {
+			m.settingsBack = m.screen
+			m.screen = screenSettings
+		}
+		return m, nil
 	case "ctrl+c":
 		return m, tea.Quit
 	case ":":
@@ -61,12 +73,14 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if key == "q" {
-			m.confirm = "Quit pokemon slowdown?"
+			m.confirm = m.tr("Quit pokemon slowdown?")
 			m.confirmAction = "quit"
 			return m, nil
 		}
 	case screenTeams:
 		return m, m.handleTeamsKey(key)
+	case screenSettings:
+		return m, m.handleSettingsKey(key)
 	default:
 		return m, m.handleLobbyKey(key)
 	}
@@ -132,7 +146,8 @@ func (m *Model) handleLobbyKey(key string) tea.Cmd {
 		m.screen = screenTeams
 	case "backspace":
 		if m.formatFilter != "" {
-			m.formatFilter = m.formatFilter[:len(m.formatFilter)-1]
+			runes := []rune(m.formatFilter)
+			m.formatFilter = string(runes[:len(runes)-1])
 			m.formatCursor = 0
 		}
 	case "esc":
@@ -171,7 +186,7 @@ func (m *Model) filteredFormats() []showdown.Format {
 	}
 	names := make([]string, len(m.formats))
 	for i, f := range m.formats {
-		names[i] = formatLabel(f)
+		names[i] = m.formatLabel(f) + " " + formatLabel(f) + " " + f.ID
 	}
 	matches := fuzzy.Find(m.formatFilter, names)
 	out := make([]showdown.Format, 0, len(matches))
@@ -190,7 +205,7 @@ func (m *Model) queueFormat(f showdown.Format) tea.Cmd {
 	format := f.ID
 	team := m.teamForFormat(f)
 	m.pendingBattle = ""
-	m.setToast("Searching " + formatLabel(f) + "…")
+	m.setToast(m.tr("Searching ") + m.formatLabel(f) + "…")
 	return func() tea.Msg {
 		if team != "" {
 			_ = client.SendTeam(team)
@@ -236,8 +251,11 @@ func (m *Model) teamForFormat(f showdown.Format) string {
 }
 
 func (m *Model) renderLobby(width, height int) string {
+	header := m.theme.Title.Render("Pokémon Slowdown") + "  " + m.theme.Muted.Render(m.tr("F2 settings · ? help"))
+	header = truncate(header, width)
+	height -= 2
 	if m.layout == LayoutCompact {
-		return m.renderLobbyList(width, height)
+		return header + "\n\n" + m.renderLobbyList(width, height)
 	}
 
 	listWidth := width * 3 / 5
@@ -248,7 +266,9 @@ func (m *Model) renderLobby(width, height int) string {
 
 	left := m.renderLobbyList(listWidth, height)
 	right := m.renderLobbySide(sideWidth, height)
-	return lipgloss.JoinHorizontal(lipgloss.Top, left, "  ", right)
+	left = lipgloss.NewStyle().Width(listWidth).MaxWidth(listWidth).MaxHeight(height).Render(left)
+	right = lipgloss.NewStyle().Width(sideWidth).MaxWidth(sideWidth).MaxHeight(height).Render(right)
+	return header + "\n\n" + lipgloss.JoinHorizontal(lipgloss.Top, left, "  ", right)
 }
 
 func (m *Model) renderLobbyList(width, height int) string {
@@ -256,10 +276,10 @@ func (m *Model) renderLobbyList(width, height int) string {
 	items := m.filteredFormats()
 
 	var b strings.Builder
-	b.WriteString(t.Title.Render("Find a battle") + "\n")
+	b.WriteString(t.Title.Render(m.tr("Find a battle")) + "\n")
 	filter := m.formatFilter
 	if filter == "" {
-		filter = t.Dim.Render("search formats…")
+		filter = t.Dim.Render(m.tr("search formats…"))
 	} else {
 		filter = t.Fg.Render(filter) + t.Primary.Render("▌")
 	}
@@ -280,7 +300,7 @@ func (m *Model) renderLobbyList(width, height int) string {
 		end = len(items)
 	}
 	if len(items) == 0 {
-		b.WriteString(t.Muted.Render("  no formats matched\n"))
+		b.WriteString(t.Muted.Render(m.tr("  no formats matched\n")))
 	}
 
 	// Leave a fixed column for the tags, so a long name cannot run into them.
@@ -294,14 +314,14 @@ func (m *Model) renderLobbyList(width, height int) string {
 
 	for i := m.formatScroll; i < end; i++ {
 		f := items[i]
-		name := truncate(formatLabel(f), nameW)
+		name := truncate(m.formatLabel(f), nameW)
 
 		var tags []string
 		if f.Random {
-			tags = append(tags, t.Accent.Render("random"))
+			tags = append(tags, t.Accent.Render(m.tr("random")))
 		}
 		if !f.Searchable {
-			tags = append(tags, t.Dim.Render("challenge"))
+			tags = append(tags, t.Dim.Render(m.tr("challenge")))
 		}
 		tagText := strings.Join(tags, " ")
 
@@ -328,15 +348,22 @@ func (m *Model) renderLobbySide(width, height int) string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString(t.Title.Render("Status") + "\n\n")
+	b.WriteString(t.Title.Render(m.tr("Status")) + "\n\n")
+	if m.loggedIn {
+		b.WriteString(t.Success.Render(SanitizeLine(m.username)) + "\n\n")
+	}
+	b.WriteString(t.Muted.Render(m.tr("Language")) + "  " + m.languageName() + "\n")
+	b.WriteString(t.Muted.Render(m.tr("Sprites")) + "  " + m.onOff(m.cfg.Sprites.Mode != "none") + "\n")
+	b.WriteString(t.Muted.Render(m.tr("Theme")) + "  " + m.cfg.Theme + "\n")
+	b.WriteString(t.Dim.Render(m.tr("F2 to change settings")) + "\n\n")
 
 	if len(m.searching) > 0 {
 		b.WriteString(t.Accent.Render("● searching "+strings.Join(m.searching, ", ")) + "\n")
-		b.WriteString(t.Dim.Render("  : cancel search") + "\n\n")
+		b.WriteString(t.Dim.Render(m.tr("  : cancel search")) + "\n\n")
 	}
 
 	if len(m.games) > 0 {
-		b.WriteString(t.Muted.Render("Battles") + "\n")
+		b.WriteString(t.Muted.Render(m.tr("Battles")) + "\n")
 		rooms := make([]string, 0, len(m.games))
 		for r := range m.games {
 			rooms = append(rooms, r)
@@ -356,33 +383,33 @@ func (m *Model) renderLobbySide(width, height int) string {
 	}
 
 	if len(m.challengesFrom) > 0 {
-		b.WriteString(t.Warning.Render("Challenges") + "\n")
+		b.WriteString(t.Warning.Render(m.tr("Challenges")) + "\n")
 		for user, format := range m.challengesFrom {
 			b.WriteString("  " + t.Fg.Render(SanitizeLine(user)) + " " +
 				t.Muted.Render(FormatName(format)) + "\n")
 		}
-		b.WriteString(t.Dim.Render("  : accept / reject") + "\n\n")
+		b.WriteString(t.Dim.Render(m.tr("  : accept / reject")) + "\n\n")
 	}
 	if m.challengeTo != nil {
-		b.WriteString(t.Muted.Render("Challenging "+SanitizeLine(m.challengeTo.To)+"…") + "\n\n")
+		b.WriteString(t.Muted.Render(m.tr("Challenging ")+SanitizeLine(m.challengeTo.To)+"…") + "\n\n")
 	}
 
 	if m.conn != connOnline {
-		b.WriteString(t.Warning.Render("connection: "+m.conn.label()) + "\n")
+		b.WriteString(t.Warning.Render(m.tr("connection: ")+m.tr(m.conn.label())) + "\n")
 	}
 	if m.authErr != "" {
 		b.WriteString(t.Danger.Render(truncate(m.authErr, width-2)) + "\n")
 	}
 	if !m.loggedIn {
 		if m.cfg.Username != "" {
-			b.WriteString(t.Warning.Render("not signed in as "+truncate(m.cfg.Username, width-20)) + "\n")
-			b.WriteString(t.Dim.Render("  : sign in") + "\n")
+			b.WriteString(t.Warning.Render(m.tr("not signed in as ")+truncate(m.cfg.Username, width-20)) + "\n")
+			b.WriteString(t.Dim.Render(m.tr("  : sign in")) + "\n")
 		} else {
-			b.WriteString(t.Dim.Render("guest · : sign in for ladder ranking") + "\n")
+			b.WriteString(t.Dim.Render(m.tr("guest · : sign in for ladder ranking")) + "\n")
 		}
 	}
 
-	b.WriteString("\n" + t.Muted.Render("enter queue · ctrl+t teams · tab battle · : palette · ? help"))
+	b.WriteString("\n" + t.Muted.Render(m.tr("enter queue · ctrl+t teams · tab battle · : palette · ? help")))
 	return b.String()
 }
 
@@ -413,10 +440,10 @@ func (m *Model) renderTeams(width, height int) string {
 	t := m.theme
 	list := m.teamsList()
 	var b strings.Builder
-	b.WriteString(t.Title.Render("Your teams") + "\n\n")
+	b.WriteString(t.Title.Render(m.tr("Your teams")) + "\n\n")
 	if len(list) == 0 {
-		b.WriteString(t.Muted.Render("  No teams stored yet.") + "\n")
-		b.WriteString(t.Dim.Render("  Import one with : import team") + "\n")
+		b.WriteString(t.Muted.Render(m.tr("  No teams stored yet.")) + "\n")
+		b.WriteString(t.Dim.Render(m.tr("  Import one with : import team")) + "\n")
 		return b.String()
 	}
 	for i, team := range list {
@@ -428,12 +455,12 @@ func (m *Model) renderTeams(width, height int) string {
 			t.Muted.Render(fmt.Sprintf("(%d)", len(team.Pokemon))) + "\n")
 	}
 	if m.teamCursor < len(list) {
-		b.WriteString("\n" + t.Muted.Render("Preview") + "\n")
+		b.WriteString("\n" + t.Muted.Render(m.tr("Preview")) + "\n")
 		for _, p := range list[m.teamCursor].Pokemon {
-			b.WriteString("  " + t.Fg.Render(p.Display()) + " " + t.Muted.Render(p.Item) + "\n")
+			b.WriteString("  " + t.Fg.Render(m.name("pokemon", p.Display())) + " " + t.Muted.Render(m.name("item", p.Item)) + "\n")
 		}
 	}
-	b.WriteString("\n" + t.Dim.Render("esc back · : palette to import or export"))
+	b.WriteString("\n" + t.Dim.Render(m.tr("esc back · : palette to import or export")))
 	return b.String()
 }
 
@@ -442,17 +469,10 @@ func (m *Model) renderTeams(width, height int) string {
 // ---------------------------------------------------------------------------
 
 func truncate(s string, n int) string {
-	if n <= 1 {
-		return s
+	if n <= 0 {
+		return ""
 	}
-	r := []rune(s)
-	if len(r) <= n {
-		return s
-	}
-	if n <= 3 {
-		return string(r[:n])
-	}
-	return string(r[:n-1]) + "…"
+	return ansi.Truncate(s, n, "…")
 }
 
 func max(a, b int) int {

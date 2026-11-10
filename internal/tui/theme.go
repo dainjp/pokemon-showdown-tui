@@ -7,7 +7,8 @@ import (
 // Theme is a complete colour scheme. Gameplay never depends on colour alone:
 // statuses and mechanics always carry a textual indicator too.
 type Theme struct {
-	Name string
+	Name   string
+	Canvas lipgloss.Style
 
 	Fg      lipgloss.Style
 	Muted   lipgloss.Style
@@ -38,11 +39,13 @@ type Theme struct {
 }
 
 // ThemeNames lists the shipped themes.
-var ThemeNames = []string{"zen", "dark", "light", "gameboy", "mono", "contrast"}
+var ThemeNames = []string{"midnight", "zen", "dark", "light", "gameboy", "mono", "contrast"}
 
 // LoadTheme returns a theme by name, falling back to zen.
 func LoadTheme(name string) Theme {
 	switch name {
+	case "midnight":
+		return midnightTheme()
 	case "dark":
 		return darkTheme()
 	case "light":
@@ -58,6 +61,16 @@ func LoadTheme(name string) Theme {
 	}
 }
 
+func midnightTheme() Theme {
+	t := buildTheme("midnight", palette{
+		bg: "#111923", fg: "#e6edf3", muted: "#a0afbd",
+		primary: "#69d4c5", accent: "#f2bb77", danger: "#ff8585",
+		success: "#a9d87c", warning: "#f2ca78", selection: "#24464b",
+	})
+	t.Dim = style("#8fa2b4", false)
+	return t
+}
+
 func style(fg string, bold bool) lipgloss.Style {
 	s := lipgloss.NewStyle().Foreground(lipgloss.Color(fg))
 	if bold {
@@ -69,6 +82,7 @@ func style(fg string, bold bool) lipgloss.Style {
 func buildTheme(name string, pal palette) Theme {
 	t := Theme{
 		Name:    name,
+		Canvas:  lipgloss.NewStyle().Background(lipgloss.Color(pal.bg)).Foreground(lipgloss.Color(pal.fg)),
 		Border:  lipgloss.RoundedBorder(),
 		Fg:      style(pal.fg, false),
 		Muted:   style(pal.muted, false),
@@ -106,12 +120,23 @@ func buildTheme(name string, pal palette) Theme {
 	t.Statuses["fnt"] = style(pal.muted, true).Faint(true)
 
 	for typ, col := range typeColors {
+		ink := "#1b1b1b"
+		switch typ {
+		case "fighting", "poison", "ghost", "dragon", "dark":
+			ink = "#ffffff"
+		}
 		t.Types[typ] = lipgloss.NewStyle().
 			Background(lipgloss.Color(col)).
-			Foreground(lipgloss.Color("#1b1b1b")).
+			Foreground(lipgloss.Color(ink)).
 			Padding(0, 1)
+		textColor := col
+		if pal.bg != "#faf8f3" {
+			if readable := darkTypeTextColors[typ]; readable != "" {
+				textColor = readable
+			}
+		}
 		t.TypesFg[typ] = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(col)).
+			Foreground(lipgloss.Color(textColor)).
 			Bold(true)
 	}
 	return t
@@ -205,4 +230,13 @@ var typeColors = map[string]string{
 	"dark":     "#705848",
 	"steel":    "#b8b8d0",
 	"fairy":    "#ee99ac",
+}
+
+// Move names use lighter versions of the type hues on dark terminal surfaces.
+var darkTypeTextColors = map[string]string{
+	"normal": "#c4c5bf", "fire": "#ffb08e", "water": "#9ec7ff", "electric": "#ffe788",
+	"grass": "#b9e58d", "ice": "#aae8ec", "fighting": "#ffaca7", "poison": "#d4a1ed",
+	"ground": "#e9d08e", "flying": "#cfc1ff", "psychic": "#ffa6ce", "bug": "#cfde85",
+	"rock": "#dccb9d", "ghost": "#c3b2ec", "dragon": "#c4b6ff", "dark": "#d7bbac",
+	"steel": "#d0d6e6", "fairy": "#ffbbdf",
 }

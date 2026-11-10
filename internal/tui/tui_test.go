@@ -18,8 +18,16 @@ import (
 	"github.com/unnipv/pokemon-slowdown/internal/storage"
 )
 
+func englishTestConfig() config.Config {
+	cfg := config.Default()
+	cfg.Language = "en"
+	return cfg
+}
+
 func testModel(t *testing.T, cfg config.Config) *Model {
 	t.Helper()
+	// Preserve the upstream English assertions; Korean coverage uses New directly.
+	cfg.Language = "en"
 	m := New(cfg, Deps{Now: func() time.Time { return time.Unix(0, 0) }})
 	m.width, m.height = 100, 40
 	m.layout = LayoutFor(m.width)
@@ -371,7 +379,7 @@ func TestMoveLinesAlignWithRealTypes(t *testing.T) {
 	if err := d.Ensure(context.Background()); err != nil {
 		t.Skipf("dex unavailable: %v", err)
 	}
-	m := New(config.Default(), Deps{Dex: d, Now: time.Now})
+	m := New(englishTestConfig(), Deps{Dex: d, Now: time.Now})
 	m.width, m.height = 80, 40
 	bv := m.battleFor("battle-x")
 	bv.apply(showdown.BattleRequest{
@@ -679,7 +687,7 @@ func TestInspectShowsFoePotential(t *testing.T) {
 	if err := d.Ensure(context.Background()); err != nil {
 		t.Skipf("dex unavailable: %v", err)
 	}
-	m := New(config.Default(), Deps{Dex: d, Now: time.Now})
+	m := New(englishTestConfig(), Deps{Dex: d, Now: time.Now})
 	m.width, m.height = 100, 44
 	feedFixtureUntilTurn(t, m, "gen9-singles.txt", 4)
 	bv := m.activeBattle()
@@ -771,7 +779,7 @@ func TestMoveClassShowsCategoryAndPower(t *testing.T) {
 	if err := d.Ensure(context.Background()); err != nil {
 		t.Skipf("dex unavailable: %v", err)
 	}
-	m := New(config.Default(), Deps{Dex: d, Now: time.Now})
+	m := New(englishTestConfig(), Deps{Dex: d, Now: time.Now})
 	bv := m.battleFor("battle-x")
 
 	if got := stripANSI(bv.moveClass("shadowball")); !strings.Contains(got, "Spec") || !strings.Contains(got, "80") {

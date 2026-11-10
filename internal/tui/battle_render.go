@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/unnipv/pokemon-slowdown/internal/battle"
 	"github.com/unnipv/pokemon-slowdown/internal/config"
@@ -20,6 +21,10 @@ import (
 // rather than for decoration.
 
 func (bv *battleView) render(width, height int, layout LayoutMode) string {
+	if bv.curWidth != width || bv.curLayout != layout {
+		bv.spriteRendered = map[string]string{}
+		bv.spritePayload = map[string]string{}
+	}
 	bv.curLayout = layout
 	bv.curWidth = width
 	bv.curHeight = height
@@ -141,7 +146,7 @@ func (bv *battleView) renderHeader(width int, layout LayoutMode) string {
 
 	right := ""
 	if s.Turn > 0 {
-		right = fmt.Sprintf("Turn %d", s.Turn)
+		right = fmt.Sprintf(bv.tr("Turn %d"), s.Turn)
 	}
 	if s.TimerOn {
 		right += "  " + bv.timerText()
@@ -255,7 +260,7 @@ func (bv *battleView) renderPartyTracker(width int, layout LayoutMode) string {
 		return t.Muted.Render(label) + " " + dots
 	}
 
-	line := "  " + part("foe", foe) + "   " + part("you", mine)
+	line := "  " + part(bv.tr("foe"), foe) + "   " + part(bv.tr("you"), mine)
 	if lipgloss.Width(line) > width {
 		line = "  " + part("f", foe) + "  " + part("y", mine)
 	}
@@ -270,7 +275,7 @@ func (bv *battleView) renderField(width int, layout LayoutMode) []string {
 	var out []string
 	out = append(out, "")
 
-	if layout.SpriteLayout() {
+	if layout.SpriteLayout() && (bv.owner == nil || bv.owner.cfg.Sprites.Mode != "none") {
 		out = append(out, bv.renderMonBlock(s.Opponent(), true, width, layout)...)
 		out = append(out, "")
 		out = append(out, bv.renderMonBlock(s.MySide(), false, width, layout)...)
@@ -308,13 +313,13 @@ func (bv *battleView) renderMonBlock(side *battle.Side, foe bool, width int, lay
 
 	label := side.Name
 	if foe {
-		label = "opponent · " + side.Name
+		label = bv.tr("opponent · ") + side.Name
 	}
 	out = append(out, t.Muted.Render("  "+SanitizeLine(label)))
 
 	active := side.ActiveParty()
 	if len(active) == 0 {
-		out = append(out, t.Dim.Render("  (no active Pokémon)"))
+		out = append(out, t.Dim.Render(bv.tr("  (no active Pokémon)")))
 		return out
 	}
 	for _, p := range active {
@@ -332,13 +337,13 @@ func (bv *battleView) renderPokemonInfo(p *battle.Pokemon, width int, foe bool, 
 		return ""
 	}
 
-	name := SanitizeLine(p.Name)
+	name := bv.pokemonName(p)
 	if g := genderGlyph(p.Gender); g != "" {
 		name += " " + g
 	}
 	title := t.Fg.Bold(true).Render(name)
 	if p.Fainted {
-		title = t.Dim.Render(name + "  fainted")
+		title = t.Dim.Render(name + bv.tr("  fainted"))
 	}
 	if types := bv.typeList(p.Species, layout); types != "" {
 		title += "  " + types
@@ -352,10 +357,10 @@ func (bv *battleView) renderPokemonInfo(p *battle.Pokemon, width int, foe bool, 
 		line2 += "  " + strings.Join(boosts, " ")
 	}
 	if p.Terastallized {
-		line2 += "  " + t.Primary.Render("tera:"+p.TeraType)
+		line2 += "  " + t.Primary.Render(bv.tr("tera:")+bv.name("type", p.TeraType))
 	}
 	if !foe && p.Item != "" {
-		line2 += "  " + t.Muted.Render(p.Item)
+		line2 += "  " + t.Muted.Render(bv.name("item", p.Item))
 	}
 	return title + "\n" + line2
 }
@@ -367,12 +372,12 @@ func (bv *battleView) renderMonLine(p *battle.Pokemon, foe bool, width int, layo
 		return ""
 	}
 
-	label := t.Muted.Render("you")
+	label := t.Muted.Render(bv.tr("you"))
 	if foe {
-		label = t.Muted.Render("foe")
+		label = t.Muted.Render(bv.tr("foe"))
 	}
 
-	rawName := SanitizeLine(p.Name)
+	rawName := bv.pokemonName(p)
 	if g := genderGlyph(p.Gender); g != "" {
 		rawName += " " + g
 	}
@@ -402,7 +407,7 @@ func (bv *battleView) renderMonLine(p *battle.Pokemon, foe bool, width int, layo
 
 	nameText := t.Fg.Bold(true).Render(displayName)
 	if p.Fainted {
-		nameText = t.Dim.Render(displayName + " fainted")
+		nameText = t.Dim.Render(displayName + bv.tr(" fainted"))
 	}
 
 	barW := 8
@@ -526,8 +531,8 @@ func (bv *battleView) typeList(species string, layout LayoutMode) string {
 	}
 	var parts []string
 	for _, typ := range sp.Types {
-		name := strings.ToUpper(typ)
-		if layout == LayoutCompact && len(name) > 3 {
+		name := bv.name("type", strings.ToUpper(typ))
+		if layout == LayoutCompact && (bv.owner == nil || bv.owner.cfg.Language != "ko") && len(name) > 3 {
 			name = name[:3]
 		}
 		if st, ok := bv.theme.Types[strings.ToLower(typ)]; ok {
@@ -544,16 +549,16 @@ func (bv *battleView) renderConditions() string {
 	t := bv.theme
 	var parts []string
 	if s.Weather != "" {
-		parts = append(parts, t.Accent.Render(weatherLabel(s.Weather)))
+		parts = append(parts, t.Accent.Render(bv.tr(weatherLabel(s.Weather))))
 	}
 	if s.Terrain != "" {
-		parts = append(parts, t.Accent.Render(cleanLabel(s.Terrain)))
+		parts = append(parts, t.Accent.Render(bv.name("move", cleanLabel(s.Terrain))))
 	}
 	for cond := range s.Field {
 		if cond == s.Terrain {
 			continue
 		}
-		parts = append(parts, t.Muted.Render(cleanLabel(cond)))
+		parts = append(parts, t.Muted.Render(bv.name("move", cleanLabel(cond))))
 	}
 	for _, side := range []*battle.Side{s.P1, s.P2} {
 		if side == nil || len(side.Conditions) == 0 {
@@ -561,11 +566,11 @@ func (bv *battleView) renderConditions() string {
 		}
 		label := side.Name
 		if s.Me != "" && side.ID == s.Me {
-			label = "you"
+			label = bv.tr("you")
 		}
 		var conds []string
 		for c := range side.Conditions {
-			conds = append(conds, cleanLabel(c))
+			conds = append(conds, bv.name("move", cleanLabel(c)))
 		}
 		parts = append(parts, t.Muted.Render(label+": "+strings.Join(conds, " ")))
 	}
@@ -628,7 +633,7 @@ func (bv *battleView) renderLogTail(n int) []string {
 		if e.Kind == "win" || e.Kind == "tie" {
 			continue
 		}
-		out = append(out, "  "+bv.styleLogLine(e))
+		out = append(out, ansi.Wrap("  "+bv.styleLogLine(e), max(1, bv.curWidth), ""))
 	}
 	return out
 }
@@ -645,7 +650,7 @@ func (bv *battleView) renderMoves(width int, layout LayoutMode) []string {
 		return nil
 	}
 	if req.Kind() == battle.RequestSwitch {
-		return []string{"", t.Danger.Render("  You must switch in a Pokémon.  ") + t.Muted.Render("press s or 1-6")}
+		return []string{"", t.Danger.Render(bv.tr("  You must switch in a Pokémon.  ")) + t.Muted.Render(bv.tr("press s or 1-6"))}
 	}
 	ar := req.ActiveAt(bv.slot)
 	if ar == nil {
@@ -665,7 +670,7 @@ func (bv *battleView) renderMoves(width int, layout LayoutMode) []string {
 	var out []string
 	out = append(out, "")
 	if len(req.Active) > 1 {
-		out = append(out, t.Muted.Render(fmt.Sprintf("  choosing for slot %d of %d", bv.slot+1, len(req.Active))))
+		out = append(out, t.Muted.Render(fmt.Sprintf(bv.tr("  choosing for slot %d of %d"), bv.slot+1, len(req.Active))))
 	}
 
 	mech := battle.AvailableMechanics(ar)
@@ -678,25 +683,25 @@ func (bv *battleView) renderMoves(width int, layout LayoutMode) []string {
 	if bv.waiting {
 		note := bv.waitNote
 		if note == "" {
-			note = "choice sent"
+			note = bv.tr("choice sent")
 		}
 		out = append(out, "", "  "+t.Success.Bold(true).Render("✓ "+note)+" "+
-			t.Muted.Render("— waiting for the opponent…"))
+			t.Muted.Render(bv.tr("— waiting for the opponent…")))
 		return out
 	}
 
 	var hints []string
 	if ch, ok := bv.draft[bv.slot]; ok {
-		hints = append(hints, t.Success.Render("chosen: "+ch.String()))
+		hints = append(hints, t.Success.Render(bv.tr("chosen: ")+ch.String()))
 	}
 	if bv.pendingMechanic != "" {
-		hints = append(hints, t.Primary.Render("mechanic: "+bv.pendingMechanic))
+		hints = append(hints, t.Primary.Render(bv.tr("mechanic: ")+bv.pendingMechanic))
 	}
 	if m, ok := mech.Primary(); ok {
-		hints = append(hints, t.Primary.Render("[t] "+m.Label))
+		hints = append(hints, t.Primary.Render("[t] "+bv.tr(m.Label)))
 	}
 	if bv.canSwitch() {
-		hints = append(hints, t.Muted.Render("[s] switch"))
+		hints = append(hints, t.Muted.Render(bv.tr("[s] switch")))
 	}
 	if len(hints) > 0 {
 		out = append(out, "  "+strings.Join(hints, "   "))
@@ -719,7 +724,7 @@ func (bv *battleView) renderMoveLine(n int, mv battle.MoveRequest, width, nameW 
 	// Pad the name AFTER styling: lipgloss normalises whitespace inside a
 	// styled string, so padding first would be silently trimmed and the PP
 	// column would drift by a character per row.
-	label := truncate(mv.Move, nameW)
+	label := truncate(bv.name("move", mv.Move), nameW)
 	var styled string
 	switch {
 	case mv.Disabled.Set || bv.waiting:
@@ -768,11 +773,11 @@ func (bv *battleView) moveClass(id string) string {
 	var parts []string
 	switch strings.ToLower(m.Category) {
 	case "physical":
-		parts = append(parts, bv.theme.Warning.Render("Phys"))
+		parts = append(parts, bv.theme.Warning.Render(bv.tr("Phys")))
 	case "special":
-		parts = append(parts, bv.theme.Primary.Render("Spec"))
+		parts = append(parts, bv.theme.Primary.Render(bv.tr("Spec")))
 	default:
-		parts = append(parts, bv.theme.Muted.Render("Status"))
+		parts = append(parts, bv.theme.Muted.Render(bv.tr("Status move")))
 	}
 	if m.BasePower > 0 {
 		parts = append(parts, bv.theme.Muted.Render(strconv.Itoa(m.BasePower)))
@@ -794,7 +799,7 @@ func (bv *battleView) typeBadge(typ string) string {
 	if !ok {
 		st = bv.theme.Muted
 	}
-	inner := st.Padding(0).Render(" " + strings.ToUpper(typ) + " ")
+	inner := st.Padding(0).Render(" " + bv.name("type", strings.ToUpper(typ)) + " ")
 	return padRight(inner, badgeWidth+2)
 }
 
@@ -820,8 +825,8 @@ func (bv *battleView) renderPreview(width int, layout LayoutMode) []string {
 	t := bv.theme
 	out := []string{
 		"",
-		t.Title.Render("  Choose your lead order"),
-		t.Muted.Render("  press a number to bring a Pokémon forward, enter to confirm"),
+		t.Title.Render(bv.tr("  Choose your lead order")),
+		t.Muted.Render(bv.tr("  press a number to bring a Pokémon forward, enter to confirm")),
 		"",
 	}
 	side := s.MySide()
@@ -838,7 +843,7 @@ func (bv *battleView) renderPreview(width int, layout LayoutMode) []string {
 		if n, ok := picks[slot]; ok {
 			marker = t.Accent.Bold(true).Render(fmt.Sprintf("%d", n))
 		}
-		line := fmt.Sprintf("  [%s] %s", marker, t.Fg.Bold(true).Render(SanitizeLine(p.Name)))
+		line := fmt.Sprintf("  [%s] %s", marker, t.Fg.Bold(true).Render(bv.pokemonName(p)))
 		if types := bv.typeList(p.Species, layout); types != "" {
 			line += "  " + types
 		}
@@ -854,10 +859,10 @@ func (bv *battleView) renderResult(width int) []string {
 	out := []string{""}
 	switch {
 	case s.Tie:
-		out = append(out, t.Warning.Render("  The battle ended in a tie."))
+		out = append(out, t.Warning.Render(bv.tr("  The battle ended in a tie.")))
 	case s.Winner != "":
 		won := bv.wonByMe(s)
-		text := "  " + SanitizeLine(s.Winner) + " won the battle!"
+		text := "  " + SanitizeLine(s.Winner) + bv.tr(" won the battle!")
 		if won {
 			out = append(out, t.Success.Bold(true).Render(text))
 			out = append(out, t.Muted.Render("  "+bv.tagline(config.SlotVictory)))
@@ -867,12 +872,12 @@ func (bv *battleView) renderResult(width int) []string {
 		}
 	}
 	out = append(out, "")
-	out = append(out, t.Muted.Render("  replay: https://replay.pokemonshowdown.com/"+s.RoomID))
+	out = append(out, t.Muted.Render(bv.tr("  replay: https://replay.pokemonshowdown.com/")+s.RoomID))
 	out = append(out, "")
 	if id := showdown.ToID(s.Tier); id != "" {
-		out = append(out, t.Success.Render("  [enter] queue "+FormatName(id)+" again"))
+		out = append(out, t.Success.Render(bv.tr("  [enter] queue ")+FormatName(id)+bv.tr(" again")))
 	}
-	out = append(out, t.Dim.Render("  [esc] lobby   [tab] switch battle   [x] close   [l] log   [c] chat"))
+	out = append(out, t.Dim.Render(bv.tr("  [esc] lobby   [tab] switch battle   [x] close   [l] log   [c] chat")))
 	return out
 }
 
@@ -906,6 +911,16 @@ func (bv *battleView) spriteBlock(p *battle.Pokemon, layout LayoutMode) string {
 	if s, ok := bv.spriteRendered[ref.Key()]; ok && s != "" {
 		return s
 	}
+	// A cached sprite may have loaded before the first render, or before a
+	// renderer toggle/resize invalidated its terminal representation.
+	if bv.deps.Sprites != nil {
+		if sprite, ok := bv.deps.Sprites.Cached(ref); ok {
+			bv.renderSprite(ref.Key(), sprite)
+			if rendered := bv.spriteRendered[ref.Key()]; rendered != "" {
+				return rendered
+			}
+		}
+	}
 	return bv.placeholderBlock(cols, rows)
 }
 
@@ -913,6 +928,9 @@ func (bv *battleView) spriteBlock(p *battle.Pokemon, layout LayoutMode) string {
 // fixed per-band size. A fixed box is either wasteful in a wide pane or cramped
 // in a narrow one, which is what makes the middle widths feel wrong.
 func (bv *battleView) spriteCells() (int, int) {
+	if bv.owner != nil && bv.owner.cfg.Sprites.Mode == "none" {
+		return 0, 0
+	}
 	if !bv.curLayout.SpriteLayout() {
 		return 0, 0
 	}
@@ -1012,9 +1030,9 @@ func (bv *battleView) waitingLine() string {
 		return ""
 	}
 	tag := bv.tagline(config.SlotWaiting)
-	label := "◌ waiting"
+	label := bv.tr("◌ waiting")
 	if s.P1.Name != "" || s.P2.Name != "" {
-		label = "◌ " + s.P1.Name + " vs " + s.P2.Name + " · waiting"
+		label = "◌ " + s.P1.Name + " vs " + s.P2.Name + bv.tr(" · waiting")
 	}
 	if tag != "" {
 		label += "  " + tag
