@@ -81,6 +81,10 @@ func (m *Model) openPalette() {
 // commands builds the palette entries for the current application state.
 func (m *Model) commands() []paletteCommand {
 	var cmds []paletteCommand
+	if m.cfg.Theme != "terminal" {
+		cmds = append(cmds, paletteCommand{title: m.tr("Use terminal default colors"), run: func(m *Model) tea.Cmd { m.setTheme("terminal"); return nil }})
+	}
+
 	if bv := m.activeBattle(); bv != nil {
 		cmds = append(cmds,
 			paletteCommand{title: m.tr("Save replay"), run: func(m *Model) tea.Cmd { return bv.roomCommand("/savereplay") }},

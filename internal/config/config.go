@@ -61,7 +61,7 @@ type Sprites struct {
 func Default() Config {
 	return Config{
 		Language:      "ko",
-		Theme:         "midnight",
+		Theme:         "terminal",
 		DefaultFormat: "gen9randombattle",
 		Taglines:      "canon",
 		Notifications: "bell",

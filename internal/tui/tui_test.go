@@ -637,7 +637,7 @@ func TestInspectOverlayFitsOnScreen(t *testing.T) {
 		out := bv.render(120, rows-2, LayoutForSize(120, rows))
 		// The framed box must be closed; a missing bottom border means it ran
 		// off the screen.
-		if !strings.Contains(out, "╰") {
+		if !strings.Contains(out, bv.theme.BoxFocus.GetBorderStyle().BottomLeft) {
 			t.Errorf("rows=%d: overlay bottom border missing", rows)
 		}
 		if got := len(strings.Split(out, "\n")); got > rows {

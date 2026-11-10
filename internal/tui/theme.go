@@ -39,11 +39,15 @@ type Theme struct {
 }
 
 // ThemeNames lists the shipped themes.
-var ThemeNames = []string{"midnight", "zen", "dark", "light", "gameboy", "mono", "contrast"}
+var ThemeNames = []string{"terminal", "midnight", "zen", "dark", "light", "gameboy", "mono", "contrast"}
 
-// LoadTheme returns a theme by name, falling back to zen.
+// LoadTheme returns a theme by name, falling back to terminal defaults.
 func LoadTheme(name string) Theme {
 	switch name {
+	case "terminal":
+		return terminalTheme()
+	case "zen":
+		return zenTheme()
 	case "midnight":
 		return midnightTheme()
 	case "dark":
@@ -57,8 +61,34 @@ func LoadTheme(name string) Theme {
 	case "contrast":
 		return contrastTheme()
 	default:
-		return zenTheme()
+		return terminalTheme()
 	}
+}
+
+// Leave both colors unset so the terminal controls contrast on light, dark,
+// transparent and custom backgrounds. Focus never needs a filled rectangle.
+func terminalTheme() Theme {
+	plain := lipgloss.NewStyle()
+	strong := plain.Bold(true)
+	t := Theme{
+		Name: "terminal", Canvas: plain, Border: lipgloss.NormalBorder(),
+		Fg: plain, Muted: plain, Dim: plain,
+		Primary: strong, Accent: strong, Danger: strong, Success: plain, Warning: strong,
+		Inverse: strong, Title: strong,
+		Box:      plain.Border(lipgloss.NormalBorder()),
+		BoxFocus: plain.Border(lipgloss.NormalBorder()),
+		Selected: strong.Underline(true), Disabled: plain,
+		HPFull: plain, HPHalf: plain, HPLow: strong,
+		Statuses: map[string]lipgloss.Style{}, Types: map[string]lipgloss.Style{}, TypesFg: map[string]lipgloss.Style{},
+	}
+	for _, status := range []string{"brn", "par", "slp", "frz", "psn", "tox", "fnt"} {
+		t.Statuses[status] = strong
+	}
+	for typ := range typeColors {
+		t.Types[typ] = plain.Padding(0, 1)
+		t.TypesFg[typ] = plain
+	}
+	return t
 }
 
 func midnightTheme() Theme {

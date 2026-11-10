@@ -53,7 +53,11 @@ func (m *Model) toggleSprites() tea.Cmd {
 }
 
 func (m *Model) cycleTheme() {
-	m.cfg.Theme = nextTheme(m.cfg.Theme)
+	m.setTheme(nextTheme(m.cfg.Theme))
+}
+
+func (m *Model) setTheme(name string) {
+	m.cfg.Theme = name
 	m.theme = LoadTheme(m.cfg.Theme)
 	for _, bv := range m.battles {
 		bv.theme = m.theme
@@ -109,7 +113,11 @@ func (m *Model) handleSettingsKey(key string) tea.Cmd {
 func (m *Model) renderSettings(width, height int) string {
 	t := m.theme
 	labels := []string{m.tr("Language"), m.tr("Sprites"), m.tr("Animation"), m.tr("Theme"), m.tr("Default format"), m.tr("Notifications")}
-	values := []string{m.languageName(), m.onOff(m.cfg.Sprites.Mode != "none"), m.onOff(m.cfg.Sprites.Animate), m.cfg.Theme, m.cfg.DefaultFormat, m.cfg.Notifications}
+	themeLabel := m.cfg.Theme
+	if themeLabel == "terminal" {
+		themeLabel = m.tr("Terminal default")
+	}
+	values := []string{m.languageName(), m.onOff(m.cfg.Sprites.Mode != "none"), m.onOff(m.cfg.Sprites.Animate), themeLabel, m.cfg.DefaultFormat, m.cfg.Notifications}
 	lines := []string{t.Title.Render(m.tr("Settings")), t.Muted.Render(m.tr("Changes are saved automatically.")), ""}
 	for i, label := range labels {
 		row := fmt.Sprintf("  %s  %s", padRight(label, 12), values[i])

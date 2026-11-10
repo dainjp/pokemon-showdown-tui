@@ -176,6 +176,12 @@ Spectate accepts room IDs and `https://play.pokemonshowdown.com/battle-…` URLs
 A replay URL can identify a room only while that room still exists on the server;
 this client does not play archived replays offline.
 
+The default `terminal` theme inherits your terminal foreground and background,
+including transparent backgrounds. It uses markers, bold and underlines for focus;
+type labels and HP remain readable without colored tiles. Existing saved themes
+are preserved: select `:` → **Use terminal default colors** to switch and save,
+or launch with `--theme terminal` for a one-time override.
+
 ## Layouts
 
 The layout is selected from the terminal width.
@@ -220,7 +226,7 @@ Every key is optional. `NO_COLOR` and `no_color` disable text styling.
 ```toml
 username = ""                     # Pokémon Showdown name
 remember = false                  # store the password in the OS keychain
-theme = "zen"                     # zen | dark | light | gameboy | mono | contrast
+theme = "terminal"                # terminal | midnight | zen | dark | light | gameboy | mono | contrast
 default_format = "gen9randombattle"
 taglines = "canon"                # canon | absurd | off
 taglines_random = false

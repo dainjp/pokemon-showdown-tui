@@ -7,17 +7,17 @@
 
 ## 1. 내 PC용 파일 받기
 
-[v0.3.0-ko.3 다운로드 페이지](https://github.com/dainjp/pokemon-showdown-tui/releases/tag/v0.3.0-ko.3)의
+[v0.3.0-ko.4 다운로드 페이지](https://github.com/dainjp/pokemon-showdown-tui/releases/tag/v0.3.0-ko.4)의
 **Assets**에서 아래 파일을 받으세요. Go나 Git 설치는 필요하지 않습니다.
 이 저장소는 비공개이므로 접근 권한이 있는 GitHub 계정으로 로그인해야 합니다.
 
 | PC | 받을 파일 |
 | --- | --- |
-| Windows x64 (일반 Intel/AMD PC) | `pokemon-showdown-tui_0.3.0-ko.3_windows_amd64.zip` |
-| Mac Apple Silicon (M1 이후) | `pokemon-showdown-tui_0.3.0-ko.3_darwin_arm64.tar.gz` |
-| Mac Intel | `pokemon-showdown-tui_0.3.0-ko.3_darwin_amd64.tar.gz` |
-| Linux x64 | `pokemon-showdown-tui_0.3.0-ko.3_linux_amd64.tar.gz` |
-| Linux ARM64 | `pokemon-showdown-tui_0.3.0-ko.3_linux_arm64.tar.gz` |
+| Windows x64 (일반 Intel/AMD PC) | `pokemon-showdown-tui_0.3.0-ko.4_windows_amd64.zip` |
+| Mac Apple Silicon (M1 이후) | `pokemon-showdown-tui_0.3.0-ko.4_darwin_arm64.tar.gz` |
+| Mac Intel | `pokemon-showdown-tui_0.3.0-ko.4_darwin_amd64.tar.gz` |
+| Linux x64 | `pokemon-showdown-tui_0.3.0-ko.4_linux_amd64.tar.gz` |
+| Linux ARM64 | `pokemon-showdown-tui_0.3.0-ko.4_linux_arm64.tar.gz` |
 
 Windows ARM64 전용 빌드는 제공하지 않습니다. `Source code` 파일은 개발용 소스이며
 바로 실행하는 프로그램이 아닙니다. Mac 종류는 Apple 메뉴 → **이 Mac에 관하여**에서 확인합니다.
@@ -62,6 +62,13 @@ Windows ARM64 전용 빌드는 제공하지 않습니다. `Source code` 파일�
 Windows와 Mac의 설정·팀·로그인 정보는 각 PC에 따로 저장됩니다.
 
 ## 5. 화면 설정과 대전
+
+새 설정의 기본 테마는 **터미널 기본**입니다. 터미널의 글자색·배경색을 그대로
+사용하고, 선택 항목은 표시 기호·굵기·밑줄로 구분합니다.
+예전 설정에 색상 테마가 저장돼 있다면 `:` → **터미널 기본 색상 사용**을 선택하세요.
+즉시 적용되고 다음 실행에도 유지됩니다. 한 번만 적용하려면 `--theme terminal`을 사용하세요.
+스프라이트도 숨기려면 `--no-sprites`를 함께 사용하세요.
+
 
 `F2`에서 언어, 스프라이트, 애니메이션, 테마, 기본 규칙, 알림을 바꾸면 즉시 적용·자동 저장됩니다.
 Mac에서 F2가 밝기 조절로 동작하면 `fn + F2`를 사용하세요.

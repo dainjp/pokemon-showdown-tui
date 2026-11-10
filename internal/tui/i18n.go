@@ -118,8 +118,10 @@ func (m *Model) formatLabel(f showdown.Format) string {
 }
 
 var koreanUI = map[string]string{
-	"Waiting for opponent": "상대를 기다리는 중",
-	"After boosts":         "랭크 반영",
+	"Terminal default":            "터미널 기본",
+	"Use terminal default colors": "터미널 기본 색상 사용",
+	"Waiting for opponent":        "상대를 기다리는 중",
+	"After boosts":                "랭크 반영",
 	"  Boosts only; item, ability, status and field modifiers excluded.": "  랭크만 반영. 도구·특성·상태이상·필드 보정은 미포함.",
 	"brn": "화상", "psn": "독", "tox": "맹독",
 	"Ability: ": "특성: ", "Item: ": "도구: ", "None": "없음", " removed)": " 소모·제거됨)", " (suppressed)": " (무효화)",

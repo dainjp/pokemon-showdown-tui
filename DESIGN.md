@@ -1,6 +1,6 @@
 ---
 name: Pokémon Slowdown
-description: Korean-first, keyboard-driven Pokémon Showdown terminal client with a calm dark midnight default.
+description: Korean-first, keyboard-driven Pokémon Showdown terminal client with a terminal-inherited default.
 colors:
   canvas: "#111923"
   foreground: "#e6edf3"
@@ -87,7 +87,7 @@ components:
 
 **Creative North Star: "The Quiet Battle Console"**
 
-Pokémon Slowdown is a terminal-first battle console: calm enough to read between turns, direct enough to operate from the keyboard. The `midnight` theme is the default visual world, with a blue-black canvas, cool white text, a clear teal orientation signal, and a warm amber action signal. The interface is a Go/Bubble Tea terminal UI run locally on Windows, macOS, or Linux, so its geometry is measured in cells and rows rather than browser pixels.
+Pokémon Slowdown is a terminal-first battle console: calm enough to read between turns, direct enough to operate from the keyboard. The `terminal` theme is the default: it inherits the terminal foreground and background and uses markers, bold and underline for emphasis. The midnight palette remains opt-in. The interface is a Go/Bubble Tea terminal UI run locally on Windows, macOS, or Linux, so its geometry is measured in cells and rows rather than browser pixels.
 
 The system keeps battle state legible through text, weight, and position as well as color. Korean and English use the same layout rules; Korean names, labels, logs, and truncation are measured by terminal display width, while player nicknames, chat, authentication values, team exports, and outbound commands remain in their original form. The other shipped themes remain selectable and keep their own palettes.
 
@@ -100,7 +100,7 @@ The system keeps battle state legible through text, weight, and position as well
 
 ## Colors
 
-The default palette is cool, dark, and restrained. `midnight` is the default; `zen`, `dark`, `light`, `gameboy`, `mono`, and `contrast` are existing user-selectable themes and must not be flattened into this palette.
+The default theme specifies no foreground or background colors. `terminal` is the default; `midnight`, `zen`, `dark`, `light`, `gameboy`, `mono`, and `contrast` are existing user-selectable themes and must not be flattened into this palette.
 
 ### Primary
 
@@ -161,7 +161,7 @@ Focused palette, prompt, and battle overlays use a bordered box with two-cell ho
 
 ## Elevation & Depth
 
-This is a flat terminal surface with tonal layering. `Canvas` supplies the midnight background; depth comes from the muted or primary border on focus boxes, the selection background on the active row, and foreground weight. The app has no CSS or terminal shadow vocabulary. `midnight` and the default dark-family themes use rounded Lipgloss borders; `light`, `gameboy`, and `mono` use normal borders; `contrast` uses a thick border.
+The default terminal theme leaves Canvas and type-badge colors unset, with no inverse or filled selection background. In opt-in colored themes, Canvas supplies the selected palette background; depth comes from the muted or primary border on focus boxes, the selection background on the active row, and foreground weight. The app has no CSS or terminal shadow vocabulary. `midnight` and the default dark-family themes use rounded Lipgloss borders; `light`, `gameboy`, and `mono` use normal borders; `contrast` uses a thick border.
 
 ### Named Rules
 
@@ -219,7 +219,7 @@ The default form is a rounded Lipgloss border around a focused command palette, 
 
 ### Do:
 
-- **Do** use the midnight tokens for the default dark surface and keep all seven shipped themes available through the existing theme cycle.
+- **Do** inherit terminal colors by default and keep all seven colored themes available through the existing theme cycle.
 - **Do** reserve teal for orientation/focus and amber for action or transient attention; pair every status color with readable text, a number, or a marker.
 - **Do** measure Korean and English by terminal display cells, preserve UTF-8 boundaries, and leave nicknames, chat, credentials, exports, and protocol commands untouched.
 - **Do** keep battle actions usable when sprites are disabled or the pane falls into compact mode; preserve the connection state in the footer.

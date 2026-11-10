@@ -141,7 +141,7 @@ func run(args []string) error {
 }
 
 func themeNames() []string {
-	return []string{"midnight", "zen", "dark", "light", "gameboy", "mono", "contrast"}
+	return []string{"terminal", "midnight", "zen", "dark", "light", "gameboy", "mono", "contrast"}
 }
 
 // splitArgs keeps positional arguments while allowing flags before or after them.
