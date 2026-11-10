@@ -67,7 +67,7 @@ func run(args []string) error {
 		fmt.Fprintln(os.Stderr, "  (none)              open the lobby")
 		fmt.Fprintln(os.Stderr, "  rand                queue a random battle")
 		fmt.Fprintln(os.Stderr, "  play <format>       queue a format, e.g. play gen9ou")
-		fmt.Fprintln(os.Stderr, "  challenge <user>    challenge a user to your default format")
+		fmt.Fprintln(os.Stderr, "  challenge <user>    choose a format and challenge a user")
 		fmt.Fprintln(os.Stderr, "  spectate <battle>   watch a battle id or replay URL")
 		fmt.Fprintln(os.Stderr, "  teams               open team management")
 		fmt.Fprintln(os.Stderr, "  doctor [--sprites]  print terminal diagnostics")

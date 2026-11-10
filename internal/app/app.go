@@ -34,7 +34,7 @@ type Options struct {
 	Format string
 	// Spectate joins a battle room as a spectator.
 	Spectate string
-	// Challenge is a username to challenge once connected.
+	// Challenge opens the format picker for this username once connected.
 	Challenge string
 	// Debug writes sanitized protocol events to a log file.
 	Debug bool

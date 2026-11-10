@@ -135,6 +135,9 @@ func (m *Model) handleLobbyKey(key string) tea.Cmd {
 		m.formatCursor = max(0, len(items)-1)
 	case "enter":
 		if m.formatCursor < len(items) {
+			if m.challengeUser != "" {
+				return m.challengeFormat(m.challengeUser, items[m.formatCursor])
+			}
 			return m.queueFormat(items[m.formatCursor])
 		}
 	case "tab":
@@ -151,8 +154,10 @@ func (m *Model) handleLobbyKey(key string) tea.Cmd {
 			m.formatCursor = 0
 		}
 	case "esc":
+		m.challengeUser = ""
 		m.formatFilter = ""
 		m.formatCursor = 0
+		m.formatScroll = 0
 	default:
 		// Every printable key filters the list. Letter shortcuts would make
 		// the search box unusable: typing "t" would open Teams instead of
@@ -181,17 +186,26 @@ func formatLabel(f showdown.Format) string {
 
 // filteredFormats applies the fuzzy filter to the server's format list.
 func (m *Model) filteredFormats() []showdown.Format {
-	if m.formatFilter == "" {
-		return m.formats
+	formats := m.formats
+	if m.challengeUser != "" {
+		formats = nil
+		for _, f := range m.formats {
+			if f.Challengeable {
+				formats = append(formats, f)
+			}
+		}
 	}
-	names := make([]string, len(m.formats))
-	for i, f := range m.formats {
+	if m.formatFilter == "" {
+		return formats
+	}
+	names := make([]string, len(formats))
+	for i, f := range formats {
 		names[i] = m.formatLabel(f) + " " + formatLabel(f) + " " + f.ID
 	}
 	matches := fuzzy.Find(m.formatFilter, names)
 	out := make([]showdown.Format, 0, len(matches))
 	for _, mt := range matches {
-		out = append(out, m.formats[mt.Index])
+		out = append(out, formats[mt.Index])
 	}
 	return out
 }
@@ -202,19 +216,12 @@ func (m *Model) queueFormat(f showdown.Format) tea.Cmd {
 		return nil
 	}
 	client := m.deps.Client
-	format := f.ID
-	team := m.teamForFormat(f)
-	m.pendingBattle = ""
-	m.setToast(m.tr("Searching ") + m.formatLabel(f) + "…")
-	return func() tea.Msg {
-		if team != "" {
-			_ = client.SendTeam(team)
-		} else {
-			_ = client.SendTeam("null")
-		}
-		_ = client.Search(format)
-		return nil
+	cmd := m.withTeam(f, func() error { return client.Search(f.ID) })
+	if cmd != nil {
+		m.pendingBattle = ""
+		m.setToast(m.tr("Searching ") + m.formatLabel(f) + "…")
 	}
+	return cmd
 }
 
 // requeue starts a new search for a format, used from the end-of-battle screen
@@ -223,18 +230,15 @@ func (m *Model) requeue(formatID string) tea.Cmd {
 	if formatID == "" {
 		formatID = m.cfg.DefaultFormat
 	}
-	return m.queueFormat(showdown.Format{
-		ID:            formatID,
-		Name:          FormatName(formatID),
-		Random:        strings.Contains(formatID, "random"),
-		Searchable:    true,
-		Challengeable: true,
-	})
+	return m.queueFormat(m.formatInfo(formatID))
 }
 
 // teamForFormat picks a stored team to submit. Random formats need none.
 func (m *Model) teamForFormat(f showdown.Format) string {
-	if f.Random || m.deps.Teams == nil {
+	if f.Random {
+		return "null"
+	}
+	if m.deps.Teams == nil {
 		return ""
 	}
 	all := m.deps.Teams.All()
@@ -242,12 +246,18 @@ func (m *Model) teamForFormat(f showdown.Format) string {
 		return ""
 	}
 	// Prefer an exact format match, else the first team.
+	format, _, _ := strings.Cut(f.ID, "@@@")
 	for _, t := range all {
-		if t.Format == f.ID {
+		if t.Format == format && len(t.Pokemon) > 0 {
 			return t.Pack()
 		}
 	}
-	return all[0].Pack()
+	for _, t := range all {
+		if len(t.Pokemon) > 0 {
+			return t.Pack()
+		}
+	}
+	return ""
 }
 
 func (m *Model) renderLobby(width, height int) string {
@@ -276,7 +286,11 @@ func (m *Model) renderLobbyList(width, height int) string {
 	items := m.filteredFormats()
 
 	var b strings.Builder
-	b.WriteString(t.Title.Render(m.tr("Find a battle")) + "\n")
+	title := m.tr("Find a battle")
+	if m.challengeUser != "" {
+		title = m.tr("Challenge format: ") + SanitizeLine(m.challengeUser)
+	}
+	b.WriteString(t.Title.Render(truncate(title, width)) + "\n")
 	filter := m.formatFilter
 	if filter == "" {
 		filter = t.Dim.Render(m.tr("search formats…"))
@@ -390,8 +404,9 @@ func (m *Model) renderLobbySide(width, height int) string {
 		}
 		b.WriteString(t.Dim.Render(m.tr("  : accept / reject")) + "\n\n")
 	}
-	if m.challengeTo != nil {
-		b.WriteString(t.Muted.Render(m.tr("Challenging ")+SanitizeLine(m.challengeTo.To)+"…") + "\n\n")
+	for _, user := range sortedChallengeUsers(m.challengesTo) {
+		b.WriteString(t.Muted.Render(m.tr("Challenging ")+SanitizeLine(user)+" · "+m.formatLabel(m.formatInfo(m.challengesTo[user]))) + "\n")
+		b.WriteString(t.Dim.Render(m.tr("  : cancel challenge")) + "\n\n")
 	}
 
 	if m.conn != connOnline {

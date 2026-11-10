@@ -1,7 +1,7 @@
 # Pokémon Showdown TUI
 
 **Windows·Mac 로컬 PC 설치:** [한국어 설치 가이드](README.ko.md)
-· [실행 파일 다운로드](https://github.com/dainjp/pokemon-showdown-tui/releases/tag/v0.3.0-ko.1)
+· [실행 파일 다운로드](https://github.com/dainjp/pokemon-showdown-tui/releases/tag/v0.3.0-ko.2)
 
 기존 Pokémon Showdown 서버에서 사람과 대전하는 터미널 클라이언트입니다.
 한국어, `F2` 설정, 스프라이트 ON/OFF, 차분한 `midnight` 테마를 추가했습니다.
@@ -15,6 +15,12 @@ screen, a midnight theme, Korean reference names and common battle messages,
 and a clear paused state when the server closes a proxy-locked connection.
 See [한국어 설치 가이드](README.ko.md) for local Windows/macOS setup and customization.
 Use `slowdown --lang en` to start in English.
+
+In `0.3.0-ko.2`, challenges open the existing format picker. Outgoing challenges
+can be cancelled individually from the `:` menu. Searches, challenges and
+acceptances upload the selected saved team first; team-based formats block with
+import guidance if none is stored. Current-server challenge PM updates are now
+supported alongside legacy `updatechallenges` events.
 
 A terminal client (TUI) for [Pokémon Showdown](https://pokemonshowdown.com),
 written in Go. It plays ladder and challenge battles — Random Battle, singles
@@ -57,7 +63,7 @@ Homebrew formula or Go module installs the original client instead of this fork.
 ### Prebuilt binaries
 
 Download the archive for your PC from
-[v0.3.0-ko.1](https://github.com/dainjp/pokemon-showdown-tui/releases/tag/v0.3.0-ko.1)
+[v0.3.0-ko.2](https://github.com/dainjp/pokemon-showdown-tui/releases/tag/v0.3.0-ko.2)
 and extract it. No Go installation is needed for these binaries.
 Run in a local terminal, outside any SSH session:
 
@@ -84,7 +90,7 @@ remove a server-side lock. See the
 slowdown                     open the lobby
 slowdown rand                queue a Gen 9 Random Battle
 slowdown play <format>       queue a format, e.g. play gen9ou
-slowdown challenge <user>    challenge a user to your default format
+slowdown challenge <user>    choose a format and challenge a user
 slowdown spectate <battle>   watch a battle id or replay URL
 slowdown teams               team management
 slowdown doctor              print terminal diagnostics

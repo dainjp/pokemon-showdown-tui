@@ -92,15 +92,17 @@ type Model struct {
 	settingsBack     screen
 	savedSpriteMode  string
 
-	formats      []showdown.Format
-	formatFilter string
-	formatCursor int
-	formatScroll int
+	formats       []showdown.Format
+	formatFilter  string
+	formatCursor  int
+	formatScroll  int
+	challengeUser string
 
-	searching      []string
-	games          map[string]string
-	challengesFrom map[string]string
-	challengeTo    *showdown.Challenge
+	searching            []string
+	games                map[string]string
+	challengesFrom       map[string]string
+	challengesTo         map[string]string
+	battleRequestPending bool
 
 	battles map[string]*battleView
 	order   []string
@@ -136,7 +138,7 @@ func (m *Model) SetAutoQueue(format string) { m.autoQueue = format }
 // SetPendingSpectate joins a battle room as a spectator once connected.
 func (m *Model) SetPendingSpectate(id string) { m.pendingSpectate = id }
 
-// SetPendingChallenge challenges a user once connected.
+// SetPendingChallenge opens challenge format selection once connected.
 func (m *Model) SetPendingChallenge(user string) { m.pendingChallenge = user }
 
 // SetStartScreenTeams opens the team manager on launch.
@@ -160,6 +162,7 @@ func New(cfg config.Config, deps Deps) *Model {
 		conn:           connConnecting,
 		games:          map[string]string{},
 		challengesFrom: map[string]string{},
+		challengesTo:   map[string]string{},
 		battles:        map[string]*battleView{},
 		sprites:        newSpriteLayer(),
 		now:            deps.Now(),
@@ -198,6 +201,8 @@ func (m *Model) SpriteWriter(out io.Writer) io.Writer {
 type tickMsg time.Time
 
 type dexReadyMsg struct{ err error }
+
+type battleRequestDoneMsg struct{ err error }
 
 type spriteReadyMsg struct {
 	key    string
@@ -278,6 +283,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case dexReadyMsg:
 		if msg.err != nil {
 			m.setToast(m.tr("Could not load dex data: ") + msg.err.Error())
+		}
+		return m, nil
+	case battleRequestDoneMsg:
+		m.battleRequestPending = false
+		if msg.err != nil {
+			m.setToast(m.tr("Could not send battle request: ") + msg.err.Error())
 		}
 		return m, nil
 
@@ -372,19 +383,12 @@ func (m *Model) handleShowdownEvent(ev showdown.Event) []tea.Cmd {
 		m.formats = e.Formats
 		if m.autoQueue != "" && !m.autoDone {
 			m.autoDone = true
-			format := m.autoQueue
-			random := strings.Contains(format, "random")
-			cmds = append(cmds, m.queueFormat(showdown.Format{
-				ID: format, Random: random, Searchable: true, Challengeable: true,
-			}))
+			cmds = append(cmds, m.queueFormat(m.formatInfo(m.autoQueue)))
 		}
 		if m.pendingChallenge != "" && m.deps.Client != nil {
 			user := m.pendingChallenge
 			m.pendingChallenge = ""
-			client := m.deps.Client
-			format := m.cfg.DefaultFormat
-			m.setToast(m.tr("Challenging ") + user + "…")
-			cmds = append(cmds, func() tea.Msg { _ = client.Challenge(user, format); return nil })
+			cmds = append(cmds, m.submitChallenge(user))
 		}
 	case showdown.SearchUpdated:
 		m.searching = e.Searching
@@ -398,7 +402,15 @@ func (m *Model) handleShowdownEvent(ev showdown.Event) []tea.Cmd {
 		}
 	case showdown.ChallengesUpdated:
 		m.challengesFrom = e.ChallengesFrom
-		m.challengeTo = e.ChallengeTo
+		if m.challengesFrom == nil {
+			m.challengesFrom = map[string]string{}
+		}
+		m.challengesTo = map[string]string{}
+		if e.ChallengeTo != nil {
+			m.challengesTo[e.ChallengeTo.To] = e.ChallengeTo.Format
+		}
+	case showdown.ChallengeUpdated:
+		m.updateChallenge(e)
 	case showdown.BattleStarted:
 		if e.Room() != "" {
 			m.deps.Client.RememberRoom(e.Room())
@@ -599,6 +611,10 @@ func (m *Model) renderStatus() string {
 	available := m.width - lipgloss.Width(right) - 1
 	hints := []string{m.tr("F2 settings · : menu")}
 	switch m.screen {
+	case screenLobby:
+		if m.challengeUser != "" {
+			hints = []string{m.tr("Enter challenge · Esc cancel · : menu"), m.tr("Enter challenge · Esc cancel")}
+		}
 	case screenBattle:
 		hints = []string{
 			m.tr("1-4 move  s switch  i inspect  l log  c chat  tab battle  : palette"),

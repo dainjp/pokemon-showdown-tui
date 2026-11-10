@@ -55,6 +55,16 @@ type ChallengesUpdated struct {
 	ChallengeTo    *Challenge
 }
 
+// ChallengeUpdated is a current-server /challenge update carried in a PM.
+// An empty Format removes the challenge between Sender and Receiver.
+type ChallengeUpdated struct {
+	Base
+	Sender     string
+	Receiver   string
+	Format     string
+	TeamFormat string
+}
+
 // QueryResponse carries the payload of a /query command.
 type QueryResponse struct {
 	Base

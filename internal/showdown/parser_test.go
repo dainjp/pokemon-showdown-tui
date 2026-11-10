@@ -64,6 +64,29 @@ func TestParseChatKeepsPipes(t *testing.T) {
 	}
 }
 
+func TestParseCurrentChallengePM(t *testing.T) {
+	for _, tc := range []struct {
+		message, format, teamFormat string
+	}{
+		{"/challenge gen9ou|gen9ou|||", "gen9ou", "gen9ou"},
+		{"/challenge gen9randombattle|gen9randombattle|||", "gen9randombattle", "gen9randombattle"},
+		{"/challenge gen9ou@@@-Pikachu|gen9ou|||", "gen9ou@@@-Pikachu", "gen9ou"},
+		{"/challenge", "", ""},
+	} {
+		events := Parse(Frame{Lines: []string{"|pm|‽Alice@!away|@Bob|" + tc.message}})
+		update, ok := events[0].(ChallengeUpdated)
+		if !ok || update.Sender != "Alice" || update.Receiver != "Bob" || update.Format != tc.format || update.TeamFormat != tc.teamFormat {
+			t.Errorf("%q: unexpected challenge update: %#v", tc.message, events[0])
+		}
+	}
+	for _, message := range []string{"hello | there", "//challenge gen9ou", "/challengecup"} {
+		events := Parse(Frame{Lines: []string{"|pm| Alice| Bob|" + message}})
+		if pm, ok := events[0].(PM); !ok || pm.Message != message {
+			t.Errorf("ordinary PM changed: %#v", events[0])
+		}
+	}
+}
+
 func TestParseChatTimestamp(t *testing.T) {
 	evs := Parse(Frame{RoomID: "lobby", Lines: []string{"|c:|1700000000|Bob|hey"}})
 	c := evs[0].(ChatMessage)

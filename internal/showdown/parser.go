@@ -3,6 +3,7 @@ package showdown
 import (
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // Parse turns one frame into typed events. Lines that do not match any known
@@ -116,6 +117,17 @@ func parseLine(room, line string) (Event, bool) {
 		}
 		if len(p) > 4 {
 			ev.Message = p[4]
+		}
+		if ev.Message == "/challenge" || strings.HasPrefix(ev.Message, "/challenge ") {
+			fields := strings.Split(strings.TrimSpace(strings.TrimPrefix(ev.Message, "/challenge")), "|")
+			update := ChallengeUpdated{
+				Base: b, Sender: ParseIdentity(ev.Sender).Name, Receiver: ParseIdentity(ev.Receiver).Name,
+				Format: fields[0],
+			}
+			if len(fields) > 1 {
+				update.TeamFormat = fields[1]
+			}
+			return update, true
 		}
 		return ev, true
 	case "battle", "b":
@@ -425,28 +437,30 @@ func parseUsers(s string) []User {
 		if p == "" {
 			continue
 		}
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		u := User{}
-		// '@' is both a rank prefix and the status separator. Only the last
-		// one, past the start, delimits a status message.
-		if i := strings.LastIndexByte(p, '@'); i > 0 {
-			u.Status = p[i+1:]
-			p = p[:i]
-		}
-		if len(p) > 0 && !isAlnum(p[0]) {
-			u.Rank = string(p[0])
-			p = p[1:]
-		}
-		u.Name = p
+		u := ParseIdentity(p)
 		if u.Name == "" {
 			continue
 		}
 		users = append(users, u)
 	}
 	return users
+}
+
+// ParseIdentity separates a server identity's rank, name and optional status.
+func ParseIdentity(identity string) User {
+	name := strings.TrimSpace(identity)
+	u := User{}
+	// '@' can be both a rank prefix and the status separator.
+	if i := strings.LastIndexByte(name, '@'); i > 0 {
+		u.Status = name[i+1:]
+		name = name[:i]
+	}
+	if len(name) > 0 && !isAlnum(name[0]) {
+		_, size := utf8.DecodeRuneInString(name)
+		u.Rank, name = name[:size], name[size:]
+	}
+	u.Name = name
+	return u
 }
 
 // parseFormats decodes the |formats| payload.

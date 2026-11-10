@@ -7,17 +7,17 @@
 
 ## 1. 내 PC용 파일 받기
 
-[v0.3.0-ko.1 다운로드 페이지](https://github.com/dainjp/pokemon-showdown-tui/releases/tag/v0.3.0-ko.1)의
+[v0.3.0-ko.2 다운로드 페이지](https://github.com/dainjp/pokemon-showdown-tui/releases/tag/v0.3.0-ko.2)의
 **Assets**에서 아래 파일을 받으세요. Go나 Git 설치는 필요하지 않습니다.
 이 저장소는 비공개이므로 접근 권한이 있는 GitHub 계정으로 로그인해야 합니다.
 
 | PC | 받을 파일 |
 | --- | --- |
-| Windows x64 (일반 Intel/AMD PC) | `pokemon-showdown-tui_0.3.0-ko.1_windows_amd64.zip` |
-| Mac Apple Silicon (M1 이후) | `pokemon-showdown-tui_0.3.0-ko.1_darwin_arm64.tar.gz` |
-| Mac Intel | `pokemon-showdown-tui_0.3.0-ko.1_darwin_amd64.tar.gz` |
-| Linux x64 | `pokemon-showdown-tui_0.3.0-ko.1_linux_amd64.tar.gz` |
-| Linux ARM64 | `pokemon-showdown-tui_0.3.0-ko.1_linux_arm64.tar.gz` |
+| Windows x64 (일반 Intel/AMD PC) | `pokemon-showdown-tui_0.3.0-ko.2_windows_amd64.zip` |
+| Mac Apple Silicon (M1 이후) | `pokemon-showdown-tui_0.3.0-ko.2_darwin_arm64.tar.gz` |
+| Mac Intel | `pokemon-showdown-tui_0.3.0-ko.2_darwin_amd64.tar.gz` |
+| Linux x64 | `pokemon-showdown-tui_0.3.0-ko.2_linux_amd64.tar.gz` |
+| Linux ARM64 | `pokemon-showdown-tui_0.3.0-ko.2_linux_arm64.tar.gz` |
 
 Windows ARM64 전용 빌드는 제공하지 않습니다. `Source code` 파일은 개발용 소스이며
 바로 실행하는 프로그램이 아닙니다. Mac 종류는 Apple 메뉴 → **이 Mac에 관하여**에서 확인합니다.
@@ -75,7 +75,19 @@ Mac에서 F2가 밝기 조절로 동작하면 `fn + F2`를 사용하세요.
 
 로그인 후 로비에서 랜덤 배틀을 선택하면 팀 준비 없이 검색할 수 있습니다.
 직접 만든 팀을 쓰려면 `:` 메뉴의 팀 가져오기에 Showdown 팀 내보내기 텍스트를 붙여넣으세요.
-친구에게 도전하거나 기존 배틀을 관전하는 기능도 `:` 메뉴에 있습니다.
+친구에게 도전하려면 `:` → **다른 사용자에게 도전…**에서 아이디를 입력하고,
+이어지는 **도전 규칙 선택** 목록에서 검색 또는 ↑/↓로 규칙을 고른 뒤 Enter를 누릅니다.
+기본 규칙 외에 OU·더블·커스텀 게임 등 서버가 도전을 허용하는 규칙을 선택할 수 있습니다.
+Esc는 전송하지 않고 선택을 취소합니다. CLI의 `slowdown challenge <아이디>`도 같은 선택 화면을 엽니다.
+
+보낸 신청을 취소하려면 `:` → **보낸 도전 취소: 상대 아이디**를 선택하세요.
+서버의 도전 상태를 받아 수락·거절·취소를 반영하며, 여러 상대에게 보낸 신청도 각각 취소할 수 있습니다.
+받은 도전의 수락·거절과 기존 배틀 관전도 `:` 메뉴에서 할 수 있습니다.
+
+팀이 필요한 규칙은 도전·수락·검색 직전에 저장된 팀을 서버에 전송합니다.
+규칙이 일치하는 팀을 우선 사용하고, 없으면 비어 있지 않은 첫 팀을 사용합니다.
+저장한 팀이 없으면 **팀 가져오기가 필요합니다**라고 안내하고 요청을 보내지 않습니다.
+랜덤 배틀은 저장된 팀을 쓰지 않습니다. 팀의 해당 규칙 적합성은 서버가 최종 검증합니다.
 
 `--no-sprites`는 시작할 때 스프라이트를 끄는 옵션입니다. 다음 실행에도 끈 상태를
 유지하려면 `F2`에서 스프라이트 설정을 변경해 저장하거나 매번 같은 옵션으로 실행하세요.

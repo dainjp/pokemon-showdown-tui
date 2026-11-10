@@ -84,13 +84,15 @@ func (m *Model) commands() []paletteCommand {
 	cmds = append(cmds, paletteCommand{
 		title: m.tr("Queue ") + def,
 		run: func(m *Model) tea.Cmd {
-			return m.queueFormat(showdown.Format{ID: m.cfg.DefaultFormat, Random: true, Searchable: true, Challengeable: true})
+			m.challengeUser = ""
+			return m.queueFormat(m.formatInfo(m.cfg.DefaultFormat))
 		},
 	})
 	cmds = append(cmds, paletteCommand{
 		title: m.tr("Find a battle (format picker)"),
 		run: func(m *Model) tea.Cmd {
 			m.screen = screenLobby
+			m.challengeUser = ""
 			return nil
 		},
 	})
@@ -136,6 +138,16 @@ func (m *Model) commands() []paletteCommand {
 		},
 	})
 
+	for _, user := range sortedChallengeUsers(m.challengesTo) {
+		cmds = append(cmds, paletteCommand{
+			title: m.tr("Cancel challenge to ") + user,
+			run: func(m *Model) tea.Cmd {
+				client := m.deps.Client
+				return m.battleCommand("", func() error { return client.CancelChallenge(user) })
+			},
+		})
+	}
+
 	users := make([]string, 0, len(m.challengesFrom))
 	for u := range m.challengesFrom {
 		users = append(users, u)
@@ -145,14 +157,9 @@ func (m *Model) commands() []paletteCommand {
 		user := u
 		format := m.challengesFrom[user]
 		cmds = append(cmds, paletteCommand{
-			title: m.tr("Accept challenge from ") + user + " (" + FormatName(format) + ")",
+			title: m.tr("Accept challenge from ") + user + " (" + m.formatLabel(m.formatInfo(format)) + ")",
 			run: func(m *Model) tea.Cmd {
-				if m.deps.Client == nil {
-					return nil
-				}
-				client := m.deps.Client
-				m.setToast(m.tr("Accepted challenge from ") + user)
-				return func() tea.Msg { _ = client.AcceptChallenge(user); return nil }
+				return m.acceptChallenge(user, format)
 			},
 		})
 		cmds = append(cmds, paletteCommand{
@@ -491,13 +498,19 @@ func (m *Model) submitLogin(p promptState) tea.Cmd {
 }
 
 func (m *Model) submitChallenge(user string) tea.Cmd {
-	if user == "" || m.deps.Client == nil {
+	if user == "" {
 		return nil
 	}
-	client := m.deps.Client
-	format := m.cfg.DefaultFormat
-	m.setToast(m.tr("Challenging ") + user + "…")
-	return func() tea.Msg { _ = client.Challenge(user, format); return nil }
+	m.challengeUser = user
+	m.formatFilter, m.formatCursor, m.formatScroll = "", 0, 0
+	m.screen = screenLobby
+	for i, f := range m.filteredFormats() {
+		if f.ID == m.cfg.DefaultFormat {
+			m.formatCursor = i
+			break
+		}
+	}
+	return nil
 }
 
 func (m *Model) submitImport(text string) tea.Cmd {
