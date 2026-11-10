@@ -498,3 +498,14 @@ func TestBackoffIsBounded(t *testing.T) {
 		t.Errorf("attempt 50 = %v, want %v", got, max)
 	}
 }
+
+func TestLeaveForgetsRoomEvenOffline(t *testing.T) {
+	c := NewClient("ws://127.0.0.1:1")
+	c.RememberRoom("battle-gen9ou-1")
+	if err := c.LeaveRoom("battle-gen9ou-1"); err == nil {
+		t.Fatal("offline leave should report error")
+	}
+	if c.rooms["battle-gen9ou-1"] {
+		t.Fatal("closed room would rejoin")
+	}
+}

@@ -9,7 +9,6 @@ import (
 
 	"github.com/unnipv/pokemon-slowdown/internal/battle"
 	"github.com/unnipv/pokemon-slowdown/internal/config"
-	"github.com/unnipv/pokemon-slowdown/internal/showdown"
 	"github.com/unnipv/pokemon-slowdown/internal/sprites"
 	"strconv"
 	"time"
@@ -66,6 +65,10 @@ func (bv *battleView) render(width, height int, layout LayoutMode) string {
 	lines := make([]string, 0, 32)
 	lines = append(lines, header)
 	budget--
+	if bv.lastError != "" && budget > 0 {
+		lines = append(lines, t.Danger.Render(truncate(bv.lastError, width)))
+		budget--
+	}
 
 	// Count actual lines, not slice elements: a sprite block is a single
 	// element holding a joined multi-line string.
@@ -353,6 +356,9 @@ func (bv *battleView) renderPokemonInfo(p *battle.Pokemon, width int, foe bool, 
 	if st := bv.statusBadge(p.Status); st != "" {
 		line2 += "  " + st
 	}
+	if sub := bv.substituteBadge(p); sub != "" {
+		line2 += "  " + sub
+	}
 	if boosts := bv.boostParts(p); len(boosts) > 0 {
 		line2 += "  " + strings.Join(boosts, " ")
 	}
@@ -385,6 +391,7 @@ func (bv *battleView) renderMonLine(p *battle.Pokemon, foe bool, width int, layo
 	hpText := bv.hpText(p, foe)
 	types := bv.typeList(p.Species, layout)
 	status := bv.statusBadge(p.Status)
+	sub := bv.substituteBadge(p)
 	boosts := strings.Join(bv.boostParts(p), " ")
 
 	// Compact keeps the types by shortening the name instead of dropping
@@ -397,6 +404,9 @@ func (bv *battleView) renderMonLine(p *battle.Pokemon, foe bool, width int, layo
 		}
 		if status != "" {
 			reserved += lipgloss.Width(status) + 1
+		}
+		if sub != "" {
+			reserved += lipgloss.Width(sub) + 1
 		}
 		avail := width - reserved
 		if avail < 8 {
@@ -425,6 +435,9 @@ func (bv *battleView) renderMonLine(p *battle.Pokemon, foe bool, width int, layo
 	// Extra information, least important last so it is dropped first when the
 	// line does not fit.
 	var extra []string
+	if sub != "" {
+		extra = append(extra, sub)
+	}
 	if status != "" {
 		extra = append(extra, status)
 	}
@@ -479,6 +492,16 @@ func (bv *battleView) statusBadge(status string) string {
 		st = bv.theme.Danger
 	}
 	return st.Render(strings.ToUpper(status))
+}
+
+// substituteBadge marks a Pokémon that is behind a Substitute. The HP bar then
+// shows the Pokémon's own health, not the decoy that is absorbing hits, so the
+// two must not be confused.
+func (bv *battleView) substituteBadge(p *battle.Pokemon) string {
+	if p == nil || !p.HasSubstitute() {
+		return ""
+	}
+	return bv.theme.Accent.Bold(true).Render("SUB")
 }
 
 var statAbbrev = map[string]string{
@@ -648,6 +671,12 @@ func (bv *battleView) renderMoves(width int, layout LayoutMode) []string {
 	req := s.Request
 	if req == nil {
 		return nil
+	}
+	if bv.sending {
+		return []string{"", t.Muted.Render(bv.tr("Sending choice…"))}
+	}
+	if req.Kind() == battle.RequestSwitch && bv.waiting {
+		return []string{"", t.Muted.Render(bv.tr("— waiting for the opponent…"))}
 	}
 	if req.Kind() == battle.RequestSwitch {
 		return []string{"", t.Danger.Render(bv.tr("  You must switch in a Pokémon.  ")) + t.Muted.Render(bv.tr("press s or 1-6"))}
@@ -821,6 +850,12 @@ func (bv *battleView) ppText(mv battle.MoveRequest) string {
 // ---------------------------------------------------------------------------
 
 func (bv *battleView) renderPreview(width int, layout LayoutMode) []string {
+	if bv.sending {
+		return []string{bv.theme.Muted.Render(bv.tr("Sending choice…"))}
+	}
+	if bv.waiting {
+		return []string{bv.theme.Muted.Render(bv.tr("— waiting for the opponent…"))}
+	}
 	s := bv.state()
 	t := bv.theme
 	out := []string{
@@ -872,10 +907,16 @@ func (bv *battleView) renderResult(width int) []string {
 		}
 	}
 	out = append(out, "")
-	out = append(out, t.Muted.Render(bv.tr("  replay: https://replay.pokemonshowdown.com/")+s.RoomID))
+	if bv.replayURL != "" {
+		out = append(out, t.Muted.Render("  "+bv.replayURL))
+	} else {
+		out = append(out, t.Muted.Render(bv.tr("  V: save replay")))
+	}
 	out = append(out, "")
-	if id := showdown.ToID(s.Tier); id != "" {
-		out = append(out, t.Success.Render(bv.tr("  [enter] queue ")+FormatName(id)+bv.tr(" again")))
+	if !s.Rated && s.Me != "" && s.Opponent() != nil {
+		out = append(out, t.Success.Render(bv.tr("  [enter] rematch ")+SanitizeLine(s.Opponent().Name)))
+	} else if s.Rated {
+		out = append(out, t.Success.Render(bv.tr("  [enter] queue ")+FormatName(bv.formatID())+bv.tr(" again")))
 	}
 	out = append(out, t.Dim.Render(bv.tr("  [esc] lobby   [tab] switch battle   [x] close   [l] log   [c] chat")))
 	return out
@@ -947,6 +988,14 @@ func (bv *battleView) spriteCells() (int, int) {
 	}
 	// A terminal cell is about twice as tall as it is wide, so half-blocks need
 	// roughly half as many rows as columns to keep the sprite square.
+	if bv.owner != nil {
+		switch bv.owner.cfg.Sprites.Size {
+		case "small":
+			cols = max(6, cols*2/3)
+		case "large":
+			cols = min(24, min(w/5, cols*4/3))
+		}
+	}
 	rows := (cols + 1) / 2
 	return cols, rows
 }

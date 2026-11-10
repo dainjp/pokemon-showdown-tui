@@ -116,10 +116,16 @@ func (bv *battleView) switchOptions() []switchOption {
 	}
 	out := make([]switchOption, 0, len(side.Party))
 	for i, p := range side.Party {
+		used := false
+		for _, choice := range bv.draft {
+			if choice.Kind == "switch" && choice.Switch == i+1 {
+				used = true
+			}
+		}
 		out = append(out, switchOption{
 			Index:   i + 1,
 			Pokemon: p,
-			Legal:   !p.Fainted && !p.Active,
+			Legal:   !p.Fainted && !p.Active && !used && bv.canSwitch(),
 		})
 	}
 	return out

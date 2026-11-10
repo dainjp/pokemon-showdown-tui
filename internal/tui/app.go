@@ -6,11 +6,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"regexp"
 	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/unnipv/pokemon-slowdown/internal/config"
 	"github.com/unnipv/pokemon-slowdown/internal/dex"
@@ -104,9 +107,11 @@ type Model struct {
 	challengesTo         map[string]string
 	battleRequestPending bool
 
-	battles map[string]*battleView
-	order   []string
-	active  string
+	closedRooms  map[string]bool
+	selectedTeam int
+	battles      map[string]*battleView
+	order        []string
+	active       string
 
 	palette       paletteState
 	prompt        promptState
@@ -164,6 +169,8 @@ func New(cfg config.Config, deps Deps) *Model {
 		challengesFrom: map[string]string{},
 		challengesTo:   map[string]string{},
 		battles:        map[string]*battleView{},
+		closedRooms:    map[string]bool{},
+		selectedTeam:   -1,
 		sprites:        newSpriteLayer(),
 		now:            deps.Now(),
 		layout:         LayoutForSize(80, 24),
@@ -224,9 +231,7 @@ func (m *Model) Init() tea.Cmd {
 			return dexReadyMsg{err: d.Ensure(ctx)}
 		})
 	}
-	if m.cfg.DefaultFormat != "" && len(m.cfg.Keybindings) == 0 {
-		// nothing: default format is used by the CLI shortcut, not forced here
-	}
+
 	return tea.Batch(cmds...)
 }
 
@@ -254,6 +259,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.layout = LayoutForSize(msg.Width, msg.Height)
+		if m.cfg.Sidecar && m.layout > LayoutSidecar {
+			m.layout = LayoutSidecar
+		}
 		return m, nil
 
 	case tea.KeyPressMsg:
@@ -285,6 +293,28 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setToast(m.tr("Could not load dex data: ") + msg.err.Error())
 		}
 		return m, nil
+	case commandDoneMsg:
+		if msg.err != nil {
+			m.setToast(m.tr("Could not send command: ") + msg.err.Error())
+		}
+		return m, nil
+	case choiceSentMsg:
+		if bv := m.battles[msg.room]; bv != nil && bv.choiceSerial == msg.serial {
+			bv.sending = false
+			if msg.err != nil {
+				bv.clearWaiting()
+				bv.lastError = SanitizeLine(msg.err.Error())
+				bv.advanceSlot()
+				m.setToast(m.tr("Could not send choice: ") + msg.err.Error())
+			} else if msg.undo {
+				bv.clearWaiting()
+				bv.advanceSlot()
+			} else {
+				bv.waiting = true
+				bv.waitNote = msg.note
+			}
+		}
+		return m, nil
 	case battleRequestDoneMsg:
 		m.battleRequestPending = false
 		if msg.err != nil {
@@ -314,6 +344,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleShowdownEvent routes a typed server event.
 func (m *Model) handleShowdownEvent(ev showdown.Event) []tea.Cmd {
 	var cmds []tea.Cmd
+	if m.closedRooms[ev.Room()] {
+		return nil
+	}
 	if m.deps.Logf != nil && m.deps.Debug {
 		m.deps.Logf("event %T room=%q", ev, ev.Room())
 	}
@@ -328,9 +361,7 @@ func (m *Model) handleShowdownEvent(ev showdown.Event) []tea.Cmd {
 		if m.pendingSpectate != "" && m.deps.Client != nil {
 			id := m.pendingSpectate
 			m.pendingSpectate = ""
-			client := m.deps.Client
-			m.setToast(m.tr("Joining ") + id + "…")
-			cmds = append(cmds, func() tea.Msg { _ = client.JoinRoom(id); return nil })
+			cmds = append(cmds, m.submitSpectate(id))
 		}
 	case showdown.Disconnected:
 		m.conn = connReconnecting
@@ -348,9 +379,19 @@ func (m *Model) handleShowdownEvent(ev showdown.Event) []tea.Cmd {
 		m.username = e.Name
 		m.loggedIn = e.Named
 		if e.Named {
+			m.authErr = ""
 			m.setToast(m.tr("Logged in as ") + e.Name)
 		}
 	case showdown.Popup:
+		for _, link := range replayLinkPattern.FindAllString(e.Message, -1) {
+			for _, bv := range m.battles {
+				id := strings.TrimPrefix(bv.room, "battle-")
+				replayID := strings.TrimPrefix(link, "https://replay.pokemonshowdown.com/")
+				if replayID == id || strings.HasPrefix(replayID, id+"-") {
+					bv.replayURL = link
+				}
+			}
+		}
 		if showdown.IsProxyLockNotice(e.Message) {
 			m.connectionNotice = m.tr("Showdown reported a proxy lock for this network's IP. See pokemonshowdown.com/pages/proxyhelp.")
 		} else {
@@ -412,15 +453,27 @@ func (m *Model) handleShowdownEvent(ev showdown.Event) []tea.Cmd {
 	case showdown.ChallengeUpdated:
 		m.updateChallenge(e)
 	case showdown.BattleStarted:
-		if e.Room() != "" {
+		if e.Room() != "" && m.deps.Client != nil {
 			m.deps.Client.RememberRoom(e.Room())
 		}
 	case showdown.RoomInit:
 		if e.Type == "battle" {
-			m.deps.Client.RememberRoom(e.RoomID)
+			if m.deps.Client != nil {
+				m.deps.Client.RememberRoom(e.RoomID)
+			}
+			_, existed := m.battles[e.RoomID]
 			bv := m.battleFor(e.RoomID)
+			if existed {
+				fresh := newBattleView(e.RoomID, m)
+				fresh.replayURL = bv.replayURL
+				fresh.choiceSerial = bv.choiceSerial + 1
+				m.battles[e.RoomID] = fresh
+				bv = fresh
+			}
 			bv.apply(ev)
-			m.openBattle(e.RoomID)
+			if !existed {
+				m.openBattle(e.RoomID)
+			}
 		}
 	case showdown.RoomTitle:
 		if bv := m.battles[e.Room()]; bv != nil {
@@ -500,7 +553,11 @@ func (m *Model) isMe(user string) bool {
 
 // View implements tea.Model.
 func (m *Model) View() tea.View {
-	v := tea.NewView(m.render())
+	content := m.render()
+	if m.cfg.NoColor || os.Getenv("NO_COLOR") != "" {
+		content = ansi.Strip(content)
+	}
+	v := tea.NewView(content)
 	v.AltScreen = true
 	v.WindowTitle = "pokemon slowdown"
 	return v
@@ -662,8 +719,13 @@ func (m *Model) renderHelp() string {
 		m.tr("  l          battle log"),
 		m.tr("  c          battle chat"),
 		m.tr("  tab        switch between open battles"),
-		m.tr("  enter      (after a battle) queue the same format again"),
+		m.tr("  enter      next ladder battle / friendly rematch"),
 		m.tr("  :          command palette"),
+		m.tr("  F2         settings"),
+		m.tr("  x          close finished battle"),
+		m.tr("  u          undo choice"),
+		m.tr("  ctrl+t     enable battle timer"),
+		m.tr("  v          save replay"),
 		m.tr("  ?          this help"),
 		m.tr("  esc        close / back to lobby"),
 		m.tr("  q          quit (asks first during a battle)"),
@@ -784,11 +846,10 @@ func (m *Model) switchBattle() {
 	m.openBattle(live[(idx+1)%len(live)])
 }
 
-// dismissBattle closes a battle room and removes it from the tab rotation. The
-// replay link stays available in the log until the client is closed.
-func (m *Model) dismissBattle(room string) {
+// dismissBattle leaves the room and removes it from the tab rotation.
+func (m *Model) dismissBattle(room string) tea.Cmd {
 	if _, ok := m.battles[room]; !ok {
-		return
+		return nil
 	}
 	title := ""
 	if bv := m.battles[room]; bv != nil {
@@ -800,26 +861,34 @@ func (m *Model) dismissBattle(room string) {
 	} else {
 		m.setToast(m.tr("Battle closed."))
 	}
+	return m.leaveBattle(room)
 }
 
 // dismissFinishedBattles closes every battle that has ended.
-func (m *Model) dismissFinishedBattles() {
+func (m *Model) dismissFinishedBattles() tea.Cmd {
+	var cmds []tea.Cmd
 	closed := 0
 	for _, room := range append([]string{}, m.order...) {
 		if bv := m.battles[room]; bv != nil && bv.state().Ended {
 			m.removeBattle(room)
+			cmds = append(cmds, m.leaveBattle(room))
 			closed++
 		}
 	}
 	if closed == 0 {
 		m.setToast(m.tr("No finished battles to close."))
-		return
+		return nil
 	}
 	m.setToast(fmt.Sprintf(m.tr("Closed %d finished battle(s)."), closed))
+	return tea.Batch(cmds...)
 }
 
 // removeBattle drops a finished battle.
 func (m *Model) removeBattle(room string) {
+	m.closedRooms[room] = true
+	if m.deps.Client != nil {
+		m.deps.Client.ForgetRoom(room)
+	}
 	delete(m.battles, room)
 	out := m.order[:0]
 	for _, r := range m.order {
@@ -905,4 +974,14 @@ func indentBlock(block string, pad int) string {
 		lines[i] = prefix + ln
 	}
 	return strings.Join(lines, "\n")
+}
+
+var replayLinkPattern = regexp.MustCompile(`https://replay\.pokemonshowdown\.com/[a-zA-Z0-9-]+`)
+
+func (m *Model) leaveBattle(room string) tea.Cmd {
+	if m.deps.Client == nil {
+		return nil
+	}
+	client := m.deps.Client
+	return func() tea.Msg { return commandDoneMsg{err: client.LeaveRoom(room)} }
 }

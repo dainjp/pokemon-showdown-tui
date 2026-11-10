@@ -26,6 +26,7 @@ func (t Team) PackedOrNull() string {
 }
 
 func packOne(p Pokemon) string {
+	p.IVs = p.effectiveIVs()
 	name := p.Name
 	if name == "" {
 		name = p.Species
@@ -38,6 +39,10 @@ func packOne(p Pokemon) string {
 	if p.Level > 0 && p.Level != 100 {
 		level = strconv.Itoa(p.Level)
 	}
+	misc := ""
+	if p.TeraType != "" {
+		misc = ",,,,," + p.TeraType
+	}
 	fields := []string{
 		name,
 		p.Species,
@@ -47,9 +52,10 @@ func packOne(p Pokemon) string {
 		p.Nature,
 		statString(p.EVs),
 		p.Gender,
-		statString(p.IVs),
+		fmt.Sprintf("%d,%d,%d,%d,%d,%d", p.IVs.HP, p.IVs.Atk, p.IVs.Def, p.IVs.SpA, p.IVs.SpD, p.IVs.Spe),
 		shiny,
 		level,
+		misc,
 	}
 	return strings.Join(fields, "|")
 }
@@ -105,7 +111,12 @@ func Unpack(s string) (Team, error) {
 			Shiny:   get(9) == "S",
 			Level:   atoi(get(10)),
 			EVs:     parsePackedStats(get(6)),
-			IVs:     parsePackedStats(get(8)),
+			IVs:     parsePackedStatsDefault(get(8), 31),
+			IVsSet:  get(8) != "",
+		}
+		misc := strings.Split(get(11), ",")
+		if len(misc) > 5 {
+			p.TeraType = misc[5]
 		}
 		if mv := get(4); mv != "" {
 			p.Moves = strings.Split(mv, ",")
@@ -124,16 +135,15 @@ func Unpack(s string) (Team, error) {
 	return t, nil
 }
 
-func parsePackedStats(s string) Stats {
-	if s == "" {
-		return Stats{}
-	}
+func parsePackedStats(s string) Stats { return parsePackedStatsDefault(s, 0) }
+
+func parsePackedStatsDefault(s string, fallback int) Stats {
 	parts := strings.Split(s, ",")
 	n := func(i int) int {
-		if i < len(parts) {
+		if i < len(parts) && parts[i] != "" {
 			return atoi(parts[i])
 		}
-		return 0
+		return fallback
 	}
 	return Stats{HP: n(0), Atk: n(1), Def: n(2), SpA: n(3), SpD: n(4), Spe: n(5)}
 }
@@ -152,10 +162,15 @@ func (t Team) Export() string {
 }
 
 func exportOne(p Pokemon) string {
+	p.IVs = p.effectiveIVs()
 	var sb strings.Builder
-	sb.WriteString(p.Species)
 	if p.Name != "" && p.Name != p.Species {
-		sb.WriteString(" (" + p.Name + ")")
+		sb.WriteString(p.Name + " (" + p.Species + ")")
+	} else {
+		sb.WriteString(p.Species)
+	}
+	if p.Gender == "M" || p.Gender == "F" {
+		sb.WriteString(" (" + p.Gender + ")")
 	}
 	if p.Item != "" {
 		sb.WriteString(" @ " + p.Item)
@@ -173,9 +188,6 @@ func exportOne(p Pokemon) string {
 	}
 	if p.Shiny {
 		sb.WriteString("Shiny: Yes\n")
-	}
-	if p.Gender != "" {
-		sb.WriteString("Gender: " + p.Gender + "\n")
 	}
 	if line := statsLine("EVs", p.EVs); line != "" {
 		sb.WriteString(line + "\n")
@@ -198,7 +210,7 @@ func exportOne(p Pokemon) string {
 func statsLine(label string, s Stats) string {
 	var parts []string
 	add := func(n int, name string) {
-		if n != 0 {
+		if (label == "IVs" && n != 31) || (label != "IVs" && n != 0) {
 			parts = append(parts, fmt.Sprintf("%d %s", n, name))
 		}
 	}
@@ -218,6 +230,25 @@ func statsLine(label string, s Stats) string {
 func ParseExport(text string) (Team, error) {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	var t Team
+	text = strings.TrimSpace(text)
+	if strings.HasPrefix(text, "===") {
+		header, rest, _ := strings.Cut(text, "\n")
+		if !strings.HasSuffix(header, "===") {
+			return Team{}, fmt.Errorf("teams: invalid header")
+		}
+		header = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(header, "==="), "==="))
+		if strings.HasPrefix(header, "[") {
+			format, name, ok := strings.Cut(header[1:], "]")
+			if !ok {
+				return Team{}, fmt.Errorf("teams: invalid format header")
+			}
+			t.Format, header = format, strings.TrimSpace(name)
+		}
+		t.Name, text = header, rest
+	}
+	if strings.Contains(text, "===") {
+		return Team{}, fmt.Errorf("teams: import one team at a time")
+	}
 	for _, block := range splitBlocks(text) {
 		p, err := parseOne(block)
 		if err != nil {
@@ -253,11 +284,23 @@ func parseOne(block string) (Pokemon, error) {
 	if len(lines) == 0 {
 		return Pokemon{}, fmt.Errorf("teams: empty block")
 	}
-	p := Pokemon{Level: 100}
+	p := Pokemon{Level: 100, IVs: Stats{31, 31, 31, 31, 31, 31}}
 	if looksLikeDirective(lines[0]) {
 		return Pokemon{}, fmt.Errorf("teams: block does not start with a species: %q", lines[0])
 	}
-	p.Name, p.Species, p.Item = parseNameLine(lines[0])
+	nameLine := strings.TrimSpace(lines[0])
+	identity, item, hasItem := strings.Cut(nameLine, " @ ")
+	for _, gender := range []string{"M", "F"} {
+		if strings.HasSuffix(identity, " ("+gender+")") {
+			p.Gender = gender
+			identity = strings.TrimSuffix(identity, " ("+gender+")")
+		}
+	}
+	nameLine = identity
+	if hasItem {
+		nameLine += " @ " + item
+	}
+	p.Name, p.Species, p.Item = parseNameLine(nameLine)
 	if p.Species == "" {
 		return Pokemon{}, fmt.Errorf("teams: block has no species: %q", lines[0])
 	}
@@ -281,7 +324,8 @@ func parseOne(block string) (Pokemon, error) {
 		case strings.HasPrefix(line, "EVs:"):
 			p.EVs = parseStatsLine(strings.TrimPrefix(line, "EVs:"))
 		case strings.HasPrefix(line, "IVs:"):
-			p.IVs = parseStatsLine(strings.TrimPrefix(line, "IVs:"))
+			p.IVsSet = true
+			p.IVs = parseStatsLine("31 HP / 31 Atk / 31 Def / 31 SpA / 31 SpD / 31 Spe / " + strings.TrimPrefix(line, "IVs:"))
 		case strings.HasSuffix(line, "Nature"):
 			p.Nature = strings.TrimSpace(strings.TrimSuffix(line, "Nature"))
 		default:
@@ -302,9 +346,9 @@ func parseNameLine(line string) (name, species, item string) {
 		line = strings.TrimSpace(line[:i])
 	}
 	if i := strings.LastIndex(line, " ("); i >= 0 && strings.HasSuffix(line, ")") {
-		// Showdown writes "Species (Nickname)".
-		species = strings.TrimSpace(line[:i])
-		name = strings.TrimSpace(line[i+2 : len(line)-1])
+		// Showdown writes "Nickname (Species)".
+		name = strings.TrimSpace(line[:i])
+		species = strings.TrimSpace(line[i+2 : len(line)-1])
 		return name, species, item
 	}
 	return "", strings.TrimSpace(line), item
@@ -356,4 +400,13 @@ func atoi(s string) int {
 		return 0
 	}
 	return n
+}
+
+// Older stores used an all-zero value for unspecified IVs. Preserve their
+// default of 31 while allowing an explicitly imported all-zero spread.
+func (p Pokemon) effectiveIVs() Stats {
+	if !p.IVsSet && p.IVs == (Stats{}) {
+		return Stats{31, 31, 31, 31, 31, 31}
+	}
+	return p.IVs
 }

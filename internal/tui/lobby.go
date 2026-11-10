@@ -37,6 +37,12 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	textInput := m.screen == screenBattle && m.activeBattle() != nil && m.activeBattle().overlay == overlayChat
+	if m.screen != screenSettings && !textInput {
+		if target, ok := m.cfg.Keybindings[key]; ok {
+			key = target
+		}
+	}
 	switch key {
 	case "f2":
 		if m.screen == screenSettings {
@@ -55,6 +61,9 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.helpOpen = true
 		return m, nil
 	case "tab":
+		if m.screen == screenSettings {
+			return m, m.handleSettingsKey(key)
+		}
 		// Tab switches between open battles. It never starts or queues one.
 		if m.screen == screenBattle {
 			m.switchBattle()
@@ -67,15 +76,13 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch m.screen {
 	case screenBattle:
 		if bv := m.activeBattle(); bv != nil {
-			cmd, handled := bv.handleKey(msg, m)
+			cmd, handled := bv.handleKeyString(key, m)
 			if handled {
 				return m, cmd
 			}
 		}
 		if key == "q" {
-			m.confirm = m.tr("Quit pokemon slowdown?")
-			m.confirmAction = "quit"
-			return m, nil
+			return m, m.requestQuit()
 		}
 	case screenTeams:
 		return m, m.handleTeamsKey(key)
@@ -94,16 +101,19 @@ func (m *Model) handleConfirmKey(key string) tea.Cmd {
 		m.confirm = ""
 		m.confirmAction = ""
 		switch action {
+		case "delete-team":
+			return m.deleteTeam()
 		case "quit":
 			return tea.Quit
 		case "forfeit":
 			if bv := m.activeBattle(); bv != nil && m.deps.Client != nil {
 				room := bv.room
 				client := m.deps.Client
-				m.removeBattle(room)
 				return func() tea.Msg {
-					_ = client.SendTo(room, "/forfeit")
-					return nil
+					if err := client.SendTo(room, "/forfeit"); err != nil {
+						return commandDoneMsg{err: err}
+					}
+					return commandDoneMsg{}
 				}
 			}
 		}
@@ -121,6 +131,8 @@ func (m *Model) handleConfirmKey(key string) tea.Cmd {
 func (m *Model) handleLobbyKey(key string) tea.Cmd {
 	items := m.filteredFormats()
 	switch key {
+	case "q":
+		return m.requestQuit()
 	case "up":
 		m.formatCursor = clamp(m.formatCursor-1, 0, max(0, len(items)-1))
 	case "down":
@@ -245,15 +257,21 @@ func (m *Model) teamForFormat(f showdown.Format) string {
 	if len(all) == 0 {
 		return ""
 	}
-	// Prefer an exact format match, else the first team.
+	// Prefer the selected compatible team, then an exact format match.
 	format, _, _ := strings.Cut(f.ID, "@@@")
+	if m.selectedTeam >= 0 && m.selectedTeam < len(all) {
+		t := all[m.selectedTeam]
+		if (t.Format == format || t.Format == "") && len(t.Pokemon) > 0 {
+			return t.Pack()
+		}
+	}
 	for _, t := range all {
 		if t.Format == format && len(t.Pokemon) > 0 {
 			return t.Pack()
 		}
 	}
 	for _, t := range all {
-		if len(t.Pokemon) > 0 {
+		if t.Format == "" && len(t.Pokemon) > 0 {
 			return t.Pack()
 		}
 	}
@@ -433,6 +451,9 @@ func (m *Model) renderLobbySide(width, height int) string {
 // ---------------------------------------------------------------------------
 
 func (m *Model) handleTeamsKey(key string) tea.Cmd {
+	if cmd, handled := m.teamAction(key); handled {
+		return cmd
+	}
 	switch key {
 	case "esc":
 		m.screen = screenLobby
@@ -461,21 +482,23 @@ func (m *Model) renderTeams(width, height int) string {
 		b.WriteString(t.Dim.Render(m.tr("  Import one with : import team")) + "\n")
 		return b.String()
 	}
-	for i, team := range list {
+	rows := max(1, height-12)
+	start := max(0, m.teamCursor-rows+1)
+	for i := start; i < len(list) && i < start+rows; i++ {
+		team := list[i]
 		marker := "  "
 		if i == m.teamCursor {
 			marker = t.Accent.Render("▸ ")
 		}
-		b.WriteString(marker + t.Fg.Render(team.Name) + " " +
-			t.Muted.Render(fmt.Sprintf("(%d)", len(team.Pokemon))) + "\n")
+		b.WriteString(truncate(marker+t.Fg.Render(team.Name)+" "+t.Muted.Render(fmt.Sprintf("(%d) %s", len(team.Pokemon), team.Format)), width) + "\n")
 	}
 	if m.teamCursor < len(list) {
 		b.WriteString("\n" + t.Muted.Render(m.tr("Preview")) + "\n")
 		for _, p := range list[m.teamCursor].Pokemon {
-			b.WriteString("  " + t.Fg.Render(m.name("pokemon", p.Display())) + " " + t.Muted.Render(m.name("item", p.Item)) + "\n")
+			b.WriteString(truncate("  "+t.Fg.Render(m.name("pokemon", p.Display()))+" "+t.Muted.Render(m.name("item", p.Item)), width) + "\n")
 		}
 	}
-	b.WriteString("\n" + t.Dim.Render(m.tr("esc back · : palette to import or export")))
+	b.WriteString("\n" + t.Dim.Render(truncate(m.tr("Enter battle · R rename · F format · E export · D delete · Esc back"), width)))
 	return b.String()
 }
 

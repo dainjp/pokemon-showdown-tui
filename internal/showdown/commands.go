@@ -79,6 +79,9 @@ func (c *Client) SendTeam(packed string) error {
 // one, in which case no request id is appended.
 func (c *Client) Choose(roomID, choice string, rqid int) error {
 	cmd := "/choose " + choice
+	if choice == "undo" {
+		return c.SendTo(roomID, "/undo")
+	}
 	if rqid > 0 {
 		cmd += fmt.Sprintf("|%d", rqid)
 	}

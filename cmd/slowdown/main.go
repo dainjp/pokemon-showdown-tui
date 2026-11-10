@@ -76,28 +76,19 @@ func run(args []string) error {
 		fs.PrintDefaults()
 	}
 
-	// Split off the subcommand before flag parsing so "slowdown play gen9ou"
-	// works without the flags parser eating the format.
-	cmd := ""
-	rest := args
-	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-		cmd = args[0]
-		rest = args[1:]
-	}
-
-	// doctor has its own flag set: --sprites is a boolean probe there, but a
-	// string backend selector everywhere else.
-	if cmd == "doctor" {
-		dfs := flag.NewFlagSet("slowdown doctor", flag.ContinueOnError)
-		probe := dfs.Bool("sprites", false, "render a test sprite through every backend")
-		if err := dfs.Parse(rest); err != nil {
-			return err
-		}
-		return app.Doctor(os.Stdout, *probe)
-	}
-
-	if err := fs.Parse(rest); err != nil {
+	flags, positional, probe, err := splitArgs(fs, args)
+	if err != nil {
 		return err
+	}
+	if err := fs.Parse(flags); err != nil {
+		return err
+	}
+	cmd := ""
+	if len(positional) > 0 {
+		cmd, positional = positional[0], positional[1:]
+	}
+	if cmd == "doctor" {
+		return app.Doctor(os.Stdout, probe)
 	}
 
 	if *showVersion {
@@ -123,20 +114,20 @@ func run(args []string) error {
 	case "rand":
 		opts.Format = "gen9randombattle"
 	case "play":
-		if fs.NArg() < 1 {
+		if len(positional) < 1 {
 			return fmt.Errorf("play needs a format, e.g. slowdown play gen9ou")
 		}
-		opts.Format = fs.Arg(0)
+		opts.Format = positional[0]
 	case "challenge":
-		if fs.NArg() < 1 {
+		if len(positional) < 1 {
 			return fmt.Errorf("challenge needs a username")
 		}
-		opts.Challenge = fs.Arg(0)
+		opts.Challenge = positional[0]
 	case "spectate":
-		if fs.NArg() < 1 {
+		if len(positional) < 1 {
 			return fmt.Errorf("spectate needs a battle id or replay URL")
 		}
-		opts.Spectate = fs.Arg(0)
+		opts.Spectate = positional[0]
 	case "teams":
 		opts.OpenTeams = true
 	case "version":
@@ -151,4 +142,45 @@ func run(args []string) error {
 
 func themeNames() []string {
 	return []string{"midnight", "zen", "dark", "light", "gameboy", "mono", "contrast"}
+}
+
+// splitArgs keeps positional arguments while allowing flags before or after them.
+func splitArgs(fs *flag.FlagSet, args []string) (flags, positional []string, probe bool, err error) {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			positional = append(positional, args[i+1:]...)
+			break
+		}
+		if !strings.HasPrefix(arg, "-") || arg == "-" {
+			positional = append(positional, arg)
+			continue
+		}
+		name, _, hasValue := strings.Cut(strings.TrimLeft(arg, "-"), "=")
+		if len(positional) > 0 && positional[0] == "doctor" && name == "sprites" {
+			if hasValue {
+				return nil, nil, false, fmt.Errorf("doctor --sprites takes no value")
+			}
+			probe = true
+			continue
+		}
+		f := fs.Lookup(name)
+		if f == nil {
+			if name == "h" || name == "help" {
+				flags = append(flags, arg)
+				continue
+			}
+			return nil, nil, false, fmt.Errorf("unknown flag %s", arg)
+		}
+		flags = append(flags, arg)
+		boolean, ok := f.Value.(interface{ IsBoolFlag() bool })
+		if !hasValue && !(ok && boolean.IsBoolFlag()) {
+			i++
+			if i == len(args) {
+				return nil, nil, false, fmt.Errorf("flag %s needs a value", arg)
+			}
+			flags = append(flags, args[i])
+		}
+	}
+	return
 }

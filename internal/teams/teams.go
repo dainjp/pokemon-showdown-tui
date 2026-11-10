@@ -35,6 +35,7 @@ type Pokemon struct {
 	Level    int      `json:"level,omitempty"`
 	EVs      Stats    `json:"evs,omitempty"`
 	IVs      Stats    `json:"ivs,omitempty"`
+	IVsSet   bool     `json:"ivs_set,omitempty"`
 	Moves    []string `json:"moves,omitempty"`
 }
 
@@ -102,8 +103,13 @@ func (s *Store) Add(t Team) error {
 	if t.Name == "" {
 		t.Name = "New Team"
 	}
+	previous := append([]Team(nil), s.Teams...)
 	s.Teams = append(s.Teams, t)
-	return s.Save()
+	if err := s.Save(); err != nil {
+		s.Teams = previous
+		return err
+	}
+	return nil
 }
 
 // Put replaces the team at index i and saves.
@@ -111,8 +117,13 @@ func (s *Store) Put(i int, t Team) error {
 	if i < 0 || i >= len(s.Teams) {
 		return fmt.Errorf("teams: no team at index %d", i)
 	}
+	previous := s.Teams[i]
 	s.Teams[i] = t
-	return s.Save()
+	if err := s.Save(); err != nil {
+		s.Teams[i] = previous
+		return err
+	}
+	return nil
 }
 
 // Delete removes the team at index i and saves.
@@ -120,8 +131,13 @@ func (s *Store) Delete(i int) error {
 	if i < 0 || i >= len(s.Teams) {
 		return fmt.Errorf("teams: no team at index %d", i)
 	}
+	previous := append([]Team(nil), s.Teams...)
 	s.Teams = append(s.Teams[:i], s.Teams[i+1:]...)
-	return s.Save()
+	if err := s.Save(); err != nil {
+		s.Teams = previous
+		return err
+	}
+	return nil
 }
 
 // Duplicate copies the team at index i with a new name.
@@ -131,8 +147,13 @@ func (s *Store) Duplicate(i int) error {
 		return fmt.Errorf("teams: no team at index %d", i)
 	}
 	t.Name = uniqueName(t.Name, s.Teams)
+	previous := append([]Team(nil), s.Teams...)
 	s.Teams = append(s.Teams, t)
-	return s.Save()
+	if err := s.Save(); err != nil {
+		s.Teams = previous
+		return err
+	}
+	return nil
 }
 
 // Save writes the store atomically.

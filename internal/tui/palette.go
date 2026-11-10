@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -79,6 +81,19 @@ func (m *Model) openPalette() {
 // commands builds the palette entries for the current application state.
 func (m *Model) commands() []paletteCommand {
 	var cmds []paletteCommand
+	if bv := m.activeBattle(); bv != nil {
+		cmds = append(cmds,
+			paletteCommand{title: m.tr("Save replay"), run: func(m *Model) tea.Cmd { return bv.roomCommand("/savereplay") }},
+			paletteCommand{title: m.tr("Enable battle timer"), run: func(m *Model) tea.Cmd { return bv.roomCommand("/timer on") }},
+			paletteCommand{title: m.tr("Undo choice"), run: func(m *Model) tea.Cmd { return bv.undo() }},
+		)
+	}
+	if m.screen == screenTeams {
+		for _, action := range []struct{ key, label string }{{"enter", "Battle with this team"}, {"r", "Rename team"}, {"f", "Set team format"}, {"e", "Export team"}, {"d", "Delete team"}} {
+			key := action.key
+			cmds = append(cmds, paletteCommand{title: m.tr(action.label), run: func(m *Model) tea.Cmd { cmd, _ := m.teamAction(key); return cmd }})
+		}
+	}
 
 	def := FormatName(m.cfg.DefaultFormat)
 	cmds = append(cmds, paletteCommand{
@@ -106,7 +121,7 @@ func (m *Model) commands() []paletteCommand {
 				}
 				client := m.deps.Client
 				m.setToast(m.tr("Search cancelled."))
-				return func() tea.Msg { _ = client.CancelSearch(); return nil }
+				return func() tea.Msg { return commandDoneMsg{err: client.CancelSearch()} }
 			},
 		})
 	}
@@ -123,7 +138,7 @@ func (m *Model) commands() []paletteCommand {
 				m.prompt = newPrompt("login", m.tr("Sign in to Pokémon Showdown"),
 					promptField{label: m.tr("Username"), value: m.cfg.Username},
 					promptField{label: m.tr("Password"), secret: true},
-					promptField{label: m.tr("Remember"), value: "n", toggle: true},
+					promptField{label: m.tr("Remember"), value: map[bool]string{true: "y", false: "n"}[m.cfg.Remember], toggle: true},
 				)
 				return nil
 			},
@@ -169,7 +184,7 @@ func (m *Model) commands() []paletteCommand {
 					return nil
 				}
 				client := m.deps.Client
-				return func() tea.Msg { _ = client.RejectChallenge(user); return nil }
+				return func() tea.Msg { return commandDoneMsg{err: client.RejectChallenge(user)} }
 			},
 		})
 	}
@@ -247,7 +262,7 @@ func (m *Model) commands() []paletteCommand {
 			title: m.tr("Close this finished battle"),
 			run: func(m *Model) tea.Cmd {
 				if bv := m.activeBattle(); bv != nil {
-					m.dismissBattle(bv.room)
+					return m.dismissBattle(bv.room)
 				}
 				return nil
 			},
@@ -257,8 +272,7 @@ func (m *Model) commands() []paletteCommand {
 		cmds = append(cmds, paletteCommand{
 			title: m.tr("Close all finished battles"),
 			run: func(m *Model) tea.Cmd {
-				m.dismissFinishedBattles()
-				return nil
+				return m.dismissFinishedBattles()
 			},
 		})
 	}
@@ -279,7 +293,7 @@ func (m *Model) commands() []paletteCommand {
 			return nil
 		}},
 		paletteCommand{title: m.tr("Keyboard help"), run: func(m *Model) tea.Cmd { m.helpOpen = true; return nil }},
-		paletteCommand{title: m.tr("Quit"), run: func(m *Model) tea.Cmd { return tea.Quit }},
+		paletteCommand{title: m.tr("Quit"), run: func(m *Model) tea.Cmd { return m.requestQuit() }},
 	)
 	return cmds
 }
@@ -438,6 +452,8 @@ func (m *Model) submitPrompt() tea.Cmd {
 	p := m.prompt
 	m.prompt = promptState{}
 	switch p.kind {
+	case "team-name", "team-format", "team-export", "default-format":
+		return m.submitTeamPrompt(p)
 	case "login":
 		return m.submitLogin(p)
 	case "challenge":
@@ -527,7 +543,13 @@ func (m *Model) submitImport(text string) tea.Cmd {
 		m.setToast(m.tr("Team storage unavailable."))
 		return nil
 	}
-	team.Name = "Imported " + team.Pokemon[0].Display()
+	if len(team.Pokemon) == 0 {
+		m.setToast(m.tr("Could not parse team: ") + "empty team")
+		return nil
+	}
+	if team.Name == "" {
+		team.Name = "Imported " + team.Pokemon[0].Display()
+	}
 	if err := m.deps.Teams.Add(team); err != nil {
 		m.setToast(m.tr("Could not save team: ") + err.Error())
 		return nil
@@ -546,9 +568,10 @@ func (m *Model) submitSpectate(input string) tea.Cmd {
 		m.setToast(m.tr("Could not read a battle id from that."))
 		return nil
 	}
+	delete(m.closedRooms, id)
 	client := m.deps.Client
 	m.setToast(m.tr("Joining ") + id + "…")
-	return func() tea.Msg { _ = client.JoinRoom(id); return nil }
+	return func() tea.Msg { return commandDoneMsg{err: client.JoinRoom(id)} }
 }
 
 // logout clears stored credentials, including the keychain entry.
@@ -603,19 +626,27 @@ func (m *Model) renderPrompt() string {
 }
 
 // battleIDFromInput extracts a battle room id from an id or a replay URL.
+var battleRoomPattern = regexp.MustCompile(`^battle-[a-z0-9]+-[a-z0-9-]+$`)
+
 func battleIDFromInput(s string) string {
 	s = strings.TrimSpace(s)
-	s = strings.TrimPrefix(s, "https://")
-	s = strings.TrimPrefix(s, "http://")
-	if i := strings.Index(s, "replay.pokemonshowdown.com/"); i >= 0 {
-		id := s[i+len("replay.pokemonshowdown.com/"):]
-		id = strings.Trim(id, "/")
-		if !strings.HasPrefix(id, "battle-") {
-			id = "battle-" + id
+	if strings.Contains(s, ".pokemonshowdown.com/") {
+		if !strings.Contains(s, "://") {
+			s = "https://" + s
 		}
-		return id
+		u, err := url.Parse(s)
+		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil {
+			return ""
+		}
+		if u.Host != "play.pokemonshowdown.com" && u.Host != "replay.pokemonshowdown.com" {
+			return ""
+		}
+		s = strings.Trim(u.Path, "/")
+		if u.Host == "replay.pokemonshowdown.com" && !strings.HasPrefix(s, "battle-") {
+			s = "battle-" + s
+		}
 	}
-	if strings.HasPrefix(s, "battle-") {
+	if battleRoomPattern.MatchString(s) {
 		return s
 	}
 	return ""

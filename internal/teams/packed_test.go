@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-const sampleExport = `Gengar (Spooky) @ Choice Specs
+const sampleExport = `Spooky (Gengar) @ Choice Specs
 Ability: Cursed Body
 Tera Type: Ghost
 EVs: 252 SpA / 4 SpD / 252 Spe
@@ -218,5 +218,52 @@ func TestParseExportSkipsBlankLinesAndUnknownDirectives(t *testing.T) {
 func TestParseExportRejectsEmptySpecies(t *testing.T) {
 	if _, err := ParseExport("Ability: Cursed Body\n- Shadow Ball\n"); err == nil {
 		t.Fatal("expected an error for a block without a species")
+	}
+}
+
+func TestOfficialExportAndPackedFields(t *testing.T) {
+	team, err := ParseExport("=== [gen9ou] Test ===\n\nSpooky (Gengar) (F) @ Choice Specs\nTera Type: Ghost\nIVs: 0 Atk\n- Shadow Ball")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := team.Pokemon[0]
+	if p.Name != "Spooky" || p.Species != "Gengar" || p.Gender != "F" || p.IVs.HP != 31 || p.IVs.Atk != 0 {
+		t.Fatalf("official export parsed incorrectly: %+v", p)
+	}
+	fields := strings.Split(team.Pack(), "|")
+	if len(fields) != 12 || fields[8] != "31,0,31,31,31,31" || fields[11] != ",,,,,Ghost" {
+		t.Fatalf("server packed fields: %v", fields)
+	}
+	back, err := Unpack(team.Pack())
+	if err != nil || back.Pokemon[0].TeraType != "Ghost" || back.Pokemon[0].IVs != p.IVs {
+		t.Fatal("packed fields lost")
+	}
+	exported := team.Export()
+	if !strings.HasPrefix(exported, "Spooky (Gengar) (F) @ Choice Specs") || !strings.Contains(exported, "IVs: 0 Atk") {
+		t.Fatalf("export = %q", exported)
+	}
+	for _, text := range []string{"Pikachu\n- Protect", "Pikachu\nIVs: 0 HP / 0 Atk / 0 Def / 0 SpA / 0 SpD / 0 Spe\n- Protect"} {
+		a, err := ParseExport(text)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := ParseExport(a.Export())
+		if err != nil || b.Pokemon[0].IVs != a.Pokemon[0].IVs {
+			t.Fatal("default/zero IVs lost")
+		}
+	}
+	legacy := Team{Pokemon: []Pokemon{{Species: "Pikachu"}}}
+	if got := strings.Split(legacy.Pack(), "|")[8]; got != "31,31,31,31,31,31" {
+		t.Fatalf("legacy default changed: %s", got)
+	}
+}
+
+func TestStoreFailurePreservesTeams(t *testing.T) {
+	store := &Store{path: t.TempDir(), Teams: []Team{{Name: "Keep"}}}
+	if err := store.Put(0, Team{Name: "Changed"}); err == nil || store.Teams[0].Name != "Keep" {
+		t.Fatal("failed rename changed memory")
+	}
+	if err := store.Delete(0); err == nil || len(store.Teams) != 1 {
+		t.Fatal("failed delete changed memory")
 	}
 }

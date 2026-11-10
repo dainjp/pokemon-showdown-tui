@@ -25,7 +25,7 @@ type Config struct {
 	Remember bool `toml:"remember"`
 	// Theme selects a colour theme by name.
 	Theme string `toml:"theme"`
-	// DefaultFormat is the format queued by "slowdown rand" and the lobby.
+	// DefaultFormat is used by the lobby shortcut and challenge format picker.
 	DefaultFormat string `toml:"default_format"`
 	// Taglines is "canon", "absurd" or "off".
 	Taglines string `toml:"taglines"`
@@ -41,7 +41,7 @@ type Config struct {
 	Sidecar bool `toml:"sidecar"`
 	// Sprites configures the sprite renderer.
 	Sprites Sprites `toml:"sprites"`
-	// Keybindings overrides default key bindings.
+	// Keybindings maps a pressed key to a default key outside text-entry overlays.
 	Keybindings map[string]string `toml:"keybindings"`
 }
 

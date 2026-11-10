@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/unnipv/pokemon-slowdown/internal/notify"
 	"github.com/unnipv/pokemon-slowdown/internal/sprites"
 )
 
@@ -65,9 +66,9 @@ func (m *Model) handleSettingsKey(key string) tea.Cmd {
 	case "esc", "q":
 		m.screen = m.settingsBack
 	case "up", "shift+tab":
-		m.settingsCursor = (m.settingsCursor + 3) % 4
+		m.settingsCursor = (m.settingsCursor + 5) % 6
 	case "down", "tab":
-		m.settingsCursor = (m.settingsCursor + 1) % 4
+		m.settingsCursor = (m.settingsCursor + 1) % 6
 	case "enter", "space", "left", "right":
 		switch m.settingsCursor {
 		case 0:
@@ -80,6 +81,22 @@ func (m *Model) handleSettingsKey(key string) tea.Cmd {
 			return m.toggleSprites()
 		case 2:
 			m.cfg.Sprites.Animate = !m.cfg.Sprites.Animate
+		case 4:
+			m.prompt = newPrompt("default-format", m.tr("Default format"), promptField{label: m.tr("Format"), value: m.cfg.DefaultFormat})
+			return nil
+		case 5:
+			modes := []string{"off", "bell", "osc", "desktop"}
+			for i, mode := range modes {
+				if mode == m.cfg.Notifications {
+					m.cfg.Notifications = modes[(i+1)%len(modes)]
+					break
+				}
+			}
+			old := m.deps.Notifier
+			m.deps.Notifier = notify.New(notify.Mode(m.cfg.Notifications))
+			if old != nil {
+				m.deps.Notifier.Out = old.Out
+			}
 		case 3:
 			m.cycleTheme()
 			return nil
@@ -91,8 +108,8 @@ func (m *Model) handleSettingsKey(key string) tea.Cmd {
 
 func (m *Model) renderSettings(width, height int) string {
 	t := m.theme
-	labels := []string{m.tr("Language"), m.tr("Sprites"), m.tr("Animation"), m.tr("Theme")}
-	values := []string{m.languageName(), m.onOff(m.cfg.Sprites.Mode != "none"), m.onOff(m.cfg.Sprites.Animate), m.cfg.Theme}
+	labels := []string{m.tr("Language"), m.tr("Sprites"), m.tr("Animation"), m.tr("Theme"), m.tr("Default format"), m.tr("Notifications")}
+	values := []string{m.languageName(), m.onOff(m.cfg.Sprites.Mode != "none"), m.onOff(m.cfg.Sprites.Animate), m.cfg.Theme, m.cfg.DefaultFormat, m.cfg.Notifications}
 	lines := []string{t.Title.Render(m.tr("Settings")), t.Muted.Render(m.tr("Changes are saved automatically.")), ""}
 	for i, label := range labels {
 		row := fmt.Sprintf("  %s  %s", padRight(label, 12), values[i])

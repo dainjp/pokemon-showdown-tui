@@ -89,8 +89,11 @@ type battleView struct {
 	// waiting is true after a choice has been sent and before the server
 	// responds. It is what tells the user the input was received, rather than
 	// the UI being stuck.
-	waiting  bool
-	waitNote string
+	sending      bool
+	choiceSerial int
+	replayURL    string
+	waiting      bool
+	waitNote     string
 }
 
 func newBattleView(room string, owner *Model) *battleView {
@@ -128,6 +131,8 @@ func (bv *battleView) state() *battle.State { return bv.reducer.State }
 
 // clearWaiting drops the "choice sent" indicator once the server has responded.
 func (bv *battleView) clearWaiting() {
+	bv.choiceSerial++
+	bv.sending = false
 	bv.waiting = false
 	bv.waitNote = ""
 }
@@ -141,11 +146,14 @@ func (bv *battleView) apply(ev showdown.Event) {
 
 	// Reset per-request UI state when a new request arrives.
 	if _, ok := ev.(showdown.BattleRequest); ok {
+		bv.lastError = ""
 		bv.draft = map[int]battle.ChoiceSlot{}
 		bv.slot = 0
 		bv.overlay = overlayNone
 		bv.overlayCursor = 0
+		bv.pendingMechanic = ""
 		bv.clearWaiting()
+		bv.advanceSlot()
 	}
 	// Any of these means the turn has moved on, so the choice is no longer
 	// pending. Waiting only needs to survive until the server acknowledges it.
@@ -156,6 +164,9 @@ func (bv *battleView) apply(ev showdown.Event) {
 	}
 	if e, ok := ev.(showdown.BattleError); ok {
 		bv.lastError = SanitizeLine(e.Message)
+		bv.draft = map[int]battle.ChoiceSlot{}
+		bv.slot = 0
+		bv.advanceSlot()
 	}
 	if _, ok := ev.(showdown.BattleInactive); ok {
 		bv.timerSeenAt = time.Now()
@@ -239,6 +250,12 @@ func (bv *battleView) wantedSprites(animate bool) []spriteRequest {
 }
 
 func (bv *battleView) spriteRef(p *battle.Pokemon, back, animate bool) sprites.Ref {
+	// A Substitute hides the Pokémon, and the simulator ships its own sprite.
+	// Drawing the decoy instead of the Pokémon is the clearest signal that
+	// incoming hits are landing on the substitute rather than the Pokémon.
+	if p.HasSubstitute() {
+		return sprites.Ref{ID: "substitute", Back: back, Animated: animate}
+	}
 	id := dex.ToID(p.Species)
 	if bv.deps.Dex != nil {
 		if sp, ok := bv.deps.Dex.Species(p.Species); ok {
@@ -314,31 +331,51 @@ func (bv *battleView) refForKey(key string) sprites.Ref {
 
 // handleKey processes a key press. It reports whether the key was consumed.
 func (bv *battleView) handleKey(msg tea.KeyPressMsg, m *Model) (tea.Cmd, bool) {
-	key := msg.String()
+	return bv.handleKeyString(msg.String(), m)
+}
+
+func (bv *battleView) handleKeyString(key string, m *Model) (tea.Cmd, bool) {
 	s := bv.state()
 
 	if bv.overlay != overlayNone {
 		return bv.handleOverlayKey(key, m), true
 	}
 
-	// Team preview takes priority: it is a different interaction entirely.
-	if s.TeamPreview {
-		return bv.handlePreviewKey(key, m), true
-	}
-
 	// A choice is in flight. Block the keys that would submit another one so
 	// the user cannot double-send; view-only keys still work, and q must fall
 	// through so the app can still raise its quit prompt.
+	if bv.sending {
+		switch key {
+		case "q", "esc", "?", "l", "i", "c":
+		default:
+			return nil, true
+		}
+	}
+	if key == "u" {
+		return bv.undo(), true
+	}
 	if bv.waiting {
 		switch key {
-		case "l", "c", "i", "tab", "?", "esc", "q":
+		case "l", "c", "i", "tab", "?", "esc", "q", "ctrl+t", "v":
 		default:
 			return nil, true
 		}
 	}
 
-	// After a battle, enter queues the same format again. That is the "next
-	// battle" action; tab is only for switching between battles already open.
+	if key == "ctrl+t" {
+		return bv.roomCommand("/timer on"), true
+	}
+	if key == "v" {
+		return bv.roomCommand("/savereplay"), true
+	}
+	if s.TeamPreview {
+		if key == "q" {
+			return nil, false
+		}
+		return bv.handlePreviewKey(key, m), true
+	}
+
+	// Enter queues another ladder game or challenges the friendly opponent again.
 	if s.Ended {
 		switch key {
 		case "enter", "r":
@@ -349,11 +386,17 @@ func (bv *battleView) handleKey(msg tea.KeyPressMsg, m *Model) (tea.Cmd, bool) {
 			if id == "" {
 				id = bv.owner.cfg.DefaultFormat
 			}
+			if !s.Rated {
+				if foe := s.Opponent(); s.Me != "" && foe != nil {
+					return bv.owner.challengeFormat(foe.Name, bv.owner.formatInfo(bv.formatID())), true
+				}
+				return nil, true
+			}
 			return bv.owner.requeue(id), true
 		case "x", "d":
 			// Close the battle so it stops appearing when switching battles.
 			if bv.owner != nil {
-				bv.owner.dismissBattle(bv.room)
+				return bv.owner.dismissBattle(bv.room), true
 			}
 			return nil, true
 		}
@@ -395,6 +438,9 @@ func (bv *battleView) handleKey(msg tea.KeyPressMsg, m *Model) (tea.Cmd, bool) {
 	}
 
 	if n := digit(key); n > 0 {
+		if s.Request != nil && s.Request.Kind() == battle.RequestSwitch {
+			return bv.commitSwitch(n), true
+		}
 		return bv.chooseMove(n, m), true
 	}
 	return nil, false
@@ -454,14 +500,7 @@ func (bv *battleView) submitPreview() tea.Cmd {
 			order = append(order, i)
 		}
 	}
-	rqid := 0
-	if s.Request != nil {
-		rqid = s.Request.RqID
-	}
-	return func() tea.Msg {
-		_ = bv.deps.Client.Choose(bv.room, battle.TeamChoice(order).String(), rqid)
-		return nil
-	}
+	return bv.sendChoice(battle.TeamChoice(order), bv.tr("Team preview"))
 }
 
 // canSwitch reports whether a switch is legal right now.
@@ -472,8 +511,11 @@ func (bv *battleView) canSwitch() bool {
 		return false
 	}
 	switch req.Kind() {
-	case battle.RequestSwitch, battle.RequestMove:
+	case battle.RequestSwitch:
 		return true
+	case battle.RequestMove:
+		ar := req.ActiveAt(bv.slot)
+		return ar != nil && !ar.Trapped
 	default:
 		return false
 	}
@@ -489,6 +531,11 @@ func (bv *battleView) toggleMechanic() bool {
 	mech, ok := battle.AvailableMechanics(ar).Primary()
 	if !ok {
 		return false
+	}
+	for _, choice := range bv.draft {
+		if choice.Mechanic == mech.Kind {
+			return false
+		}
 	}
 	if bv.pendingMechanic == mech.Kind {
 		bv.pendingMechanic = ""
@@ -553,11 +600,22 @@ func (bv *battleView) commitSwitch(partySlot int) tea.Cmd {
 	if req == nil {
 		return nil
 	}
-	if req.Kind() == battle.RequestSwitch {
-		// Forced switch: one decision, submit immediately.
-		return bv.sendChoice(
-			battle.Choice{Slots: []battle.ChoiceSlot{{Kind: "switch", Switch: partySlot}}},
-			bv.switchNote(partySlot))
+	if !bv.canSwitch() {
+		return nil
+	}
+	legal := false
+	for _, n := range req.BenchSlots() {
+		if n == partySlot {
+			legal = true
+		}
+	}
+	for _, choice := range bv.draft {
+		if choice.Kind == "switch" && choice.Switch == partySlot {
+			legal = false
+		}
+	}
+	if !legal {
+		return nil
 	}
 	bv.draft[bv.slot] = battle.ChoiceSlot{Kind: "switch", Switch: partySlot}
 	return bv.maybeSubmit()
@@ -575,10 +633,13 @@ func (bv *battleView) maybeSubmit() tea.Cmd {
 	for i := 0; i < need; i++ {
 		slot, ok := bv.draft[i]
 		if !ok {
-			if req.Kind() == battle.RequestMove {
-				// A fainted or empty slot may be passed.
+			if bv.passSlot(i) {
 				slots = append(slots, battle.ChoiceSlot{Kind: "pass"})
 				continue
+			}
+			bv.slot = i
+			if req.Kind() == battle.RequestSwitch {
+				bv.overlay = overlaySwitch
 			}
 			return nil
 		}
@@ -621,7 +682,7 @@ func (bv *battleView) switchNote(partySlot int) string {
 
 func (bv *battleView) sendChoice(choice battle.Choice, note string) tea.Cmd {
 	s := bv.state()
-	if bv.deps.Client == nil {
+	if bv.deps.Client == nil || bv.sending || (bv.waiting && choice.Raw != "undo") {
 		return nil
 	}
 	rqid := 0
@@ -631,12 +692,12 @@ func (bv *battleView) sendChoice(choice battle.Choice, note string) tea.Cmd {
 	text := choice.String()
 	bv.draft = map[int]battle.ChoiceSlot{}
 	bv.slot = 0
-	// Show that the choice landed; it clears when the server responds.
-	bv.waiting = true
-	bv.waitNote = note
+	bv.lastError = ""
+	bv.sending = true
+	bv.choiceSerial++
+	serial, room, client := bv.choiceSerial, bv.room, bv.deps.Client
 	return func() tea.Msg {
-		_ = bv.deps.Client.Choose(bv.room, text, rqid)
-		return nil
+		return choiceSentMsg{room: room, serial: serial, note: note, undo: choice.Raw == "undo", err: client.Choose(room, text, rqid)}
 	}
 }
 
@@ -655,8 +716,8 @@ func (bv *battleView) handleOverlayKey(key string, m *Model) tea.Cmd {
 			bv.overlayCursor = clamp(bv.overlayCursor+1, 0, len(slots)-1)
 		case "enter":
 			if bv.overlayCursor < len(slots) && slots[bv.overlayCursor].Legal {
-				cmd := bv.commitSwitch(slots[bv.overlayCursor].Index)
 				bv.overlay = overlayNone
+				cmd := bv.commitSwitch(slots[bv.overlayCursor].Index)
 				return cmd
 			}
 		case "i":
@@ -669,8 +730,8 @@ func (bv *battleView) handleOverlayKey(key string, m *Model) tea.Cmd {
 			if d := digit(key); d > 0 {
 				for _, sl := range slots {
 					if sl.Index == d && sl.Legal {
-						cmd := bv.commitSwitch(d)
 						bv.overlay = overlayNone
+						cmd := bv.commitSwitch(d)
 						return cmd
 					}
 				}
@@ -740,8 +801,7 @@ func (bv *battleView) handleOverlayKey(key string, m *Model) tea.Cmd {
 				room := bv.room
 				client := bv.deps.Client
 				return func() tea.Msg {
-					_ = client.Chat(room, text)
-					return nil
+					return commandDoneMsg{err: client.Chat(room, text)}
 				}
 			}
 		case "backspace":

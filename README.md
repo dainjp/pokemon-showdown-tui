@@ -142,7 +142,11 @@ Server behaviour, verified against the live service:
 | `l` | full battle log |
 | `c` | battle chat |
 | `tab` | switch between battles still in progress |
-| `enter` | after a battle, queue the same format again |
+| `enter` | after a ladder battle, queue again; after a friendly battle, challenge the same opponent |
+| `u` | undo the draft or submitted choice, when the server allows it |
+| `ctrl+t` | enable the battle timer |
+| `v` | save a replay; display the server-confirmed link after upload |
+| `F2` | settings, including default format and notifications |
 | `x` | close a finished battle, removing it from `tab` |
 | `:` | command palette |
 | `?` | keyboard help |
@@ -155,6 +159,22 @@ shortcuts. Spread and self-targeting moves resolve without one.
 
 Forfeiting is a command palette action, not a key, and always asks for
 confirmation.
+
+## Team management
+
+In Teams, use `r` to rename, `f` to assign a format ID (for example `gen9ou`),
+`e` to export to a new file, and `d` to delete after confirmation. `enter`
+selects that team and queues its format. These actions also appear in `:`.
+Imports and exports preserve `=== [gen9ou] Team name ===` headers.
+A compatible selected team takes priority, followed by an exact format match,
+then a team with no assigned format. A team assigned to a different format is
+never selected implicitly. Random formats upload `null`.
+
+Flags work before or after positional arguments, for example
+`slowdown play gen9ou --lang ko --no-sprites`.
+Spectate accepts room IDs and `https://play.pokemonshowdown.com/battle-…` URLs.
+A replay URL can identify a room only while that room still exists on the server;
+this client does not play archived replays offline.
 
 ## Layouts
 
@@ -194,7 +214,8 @@ mode a static frame is drawn.
 ## Configuration
 
 `~/.config/pokemon-slowdown/config.toml`, or `$XDG_CONFIG_HOME/pokemon-slowdown/`.
-Every key is optional. `NO_COLOR` is honoured.
+Every key is optional. `NO_COLOR` and `no_color` disable text styling.
+`F2` preferences apply immediately and are saved automatically.
 
 ```toml
 username = ""                     # Pokémon Showdown name
@@ -206,7 +227,7 @@ taglines_random = false
 notifications = "bell"            # off | bell | osc | desktop
 debug = false
 no_color = false
-sidecar = false
+sidecar = false                   # cap the layout at the narrow sidecar mode
 
 [sprites]
 mode = "auto"                     # auto | kitty | iterm2 | sixel | blocks | none
@@ -215,7 +236,8 @@ size = "medium"                   # small | medium | large
 # cache_dir = "/custom/path"
 
 [keybindings]
-# override any binding
+# map a physical key to a default key outside text-entry overlays
+# z = "s"                       # Z opens the switch picker
 ```
 
 ## Files
