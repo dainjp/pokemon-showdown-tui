@@ -711,8 +711,12 @@ func (bv *battleView) renderMoves(width int, layout LayoutMode) []string {
 		if note == "" {
 			note = bv.tr("choice sent")
 		}
-		out = append(out, "", "  "+t.Success.Bold(true).Render("✓ "+note)+" "+
-			t.Muted.Render(bv.tr("— waiting for the opponent…")))
+		line := "  " + t.Success.Bold(true).Render("✓ "+note) + " " +
+			t.Muted.Render(bv.tr("— waiting for the opponent…"))
+		if lipgloss.Width(line) > width {
+			line = "  " + t.Success.Bold(true).Render("✓ ") + t.Muted.Render(bv.tr("Waiting for opponent"))
+		}
+		out = append(out, "", truncate(line, width))
 		return out
 	}
 

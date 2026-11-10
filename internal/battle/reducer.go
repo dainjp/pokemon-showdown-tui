@@ -207,6 +207,13 @@ func (r *Reducer) Apply(ev showdown.Event) {
 		}
 	case showdown.BattleHeal:
 		holder := e.Tags.Get("of")
+		// Absorption heals name the attacker in [of], whereas Hospitality
+		// names the ally providing the heal. Never give an attacker the
+		// defender's absorption ability.
+		switch e.Tags.Get("from") {
+		case "ability: Water Absorb", "ability: Volt Absorb", "ability: Dry Skin", "ability: Earth Eater":
+			holder = e.Target
+		}
 		if holder == "" {
 			holder = e.Target
 		}
