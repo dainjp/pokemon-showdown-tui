@@ -295,7 +295,7 @@ func parseBattle(b Base, typ, line string) (Event, bool) {
 	case "swap":
 		return BattleSwap{Base: b, User: arg(1), Position: atoi(arg(2))}, true
 	case "cant":
-		return BattleCant{Base: b, User: arg(1), Reason: arg(2), Move: arg(3)}, true
+		return BattleCant{Base: b, User: arg(1), Reason: arg(2), Move: arg(3), Of: tags["of"]}, true
 	case "faint":
 		return BattleFaint{Base: b, User: arg(1)}, true
 

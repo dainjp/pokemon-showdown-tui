@@ -98,13 +98,16 @@ type Pokemon struct {
 	Fainted   bool
 	Active    bool
 
-	Item        string
-	Ability     string
-	BaseAbility string
+	ItemKnown         bool
+	LastItem          string
+	AbilitySuppressed bool
+	Item              string
+	Ability           string
+	BaseAbility       string
 
 	// Stats are the absolute, current stat values as reported by the server
-	// for our own Pokémon (after level, nature, EVs, IVs and any item or
-	// ability that modifies them at switch-in). Empty for the opponent, whose
+	// for our own Pokémon (level, nature, EVs and IVs; before battle
+	// boosts and other modifiers). Empty for the opponent, whose
 	// stats are not revealed.
 	Stats map[string]int
 	// SeenMoves records moves this Pokémon has actually used. For the opponent

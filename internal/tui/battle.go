@@ -80,7 +80,8 @@ type battleView struct {
 	// tick locally between server messages.
 	timerSeenAt time.Time
 	// inspectIndex selects which Pokémon the inspect overlay shows.
-	inspectIndex int
+	inspectScroll int
+	inspectIndex  int
 	// inspectBack is the overlay to return to when inspect closes. It is
 	// overlaySwitch when inspect was opened from the switch overlay, so the
 	// user lands back on the party list with their cursor intact.
@@ -774,16 +775,26 @@ func (bv *battleView) handleOverlayKey(key string, m *Model) tea.Cmd {
 		}
 	case overlayInspect:
 		switch key {
+		case "pgdown":
+			bv.inspectScroll += 6
+		case "pgup":
+			bv.inspectScroll = max(0, bv.inspectScroll-6)
+		case "home":
+			bv.inspectScroll = 0
+		case "end":
+			bv.inspectScroll = 10000
 		case "esc", "i":
 			back := bv.inspectBack
 			bv.inspectBack = overlayNone
 			bv.overlay = back
 		case "up", "k", "left":
+			bv.inspectScroll = 0
 			bv.inspectIndex--
 			if bv.inspectIndex < 0 {
 				bv.inspectIndex = max(0, len(bv.inspectables())-1)
 			}
 		case "down", "j", "right", "tab":
+			bv.inspectScroll = 0
 			bv.inspectIndex++
 			if n := len(bv.inspectables()); n > 0 && bv.inspectIndex >= n {
 				bv.inspectIndex = 0

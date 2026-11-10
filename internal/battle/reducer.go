@@ -155,10 +155,30 @@ func (r *Reducer) Apply(ev showdown.Event) {
 		if p := r.State.Find(e.User); p != nil {
 			name = r.display(p)
 		}
-		if e.Move != "" {
-			r.log("cant", "%s can't use %s! (%s)", name, e.Move, e.Reason)
-		} else {
-			r.log("cant", "%s can't move! (%s)", name, e.Reason)
+		// For these effects the protocol's User is the ability holder, not
+		// the attacker. [of] carries the blocked attacker (also in doubles).
+		switch e.Reason {
+		case "ability: Queenly Majesty", "ability: Dazzling", "ability: Armor Tail", "ability: Damp":
+			ability := cleanCondition(e.Reason)
+			if p := r.State.Find(e.User); p != nil {
+				p.Ability = ability
+			}
+			if e.Of != "" {
+				attacker := identName(e.Of)
+				if p := r.State.Find(e.Of); p != nil {
+					attacker = r.display(p)
+				}
+				r.log("cant", "%s's %s blocked %s's %s!", name, ability, attacker, e.Move)
+			} else {
+				r.log("cant", "%s's %s blocked %s!", name, ability, e.Move)
+			}
+			break
+		default:
+			if e.Move != "" {
+				r.log("cant", "%s can't use %s! (%s)", name, e.Move, e.Reason)
+			} else {
+				r.log("cant", "%s can't move! (%s)", name, e.Reason)
+			}
 		}
 	case showdown.BattleFaint:
 		if p := r.State.Find(e.User); p != nil {
@@ -171,6 +191,11 @@ func (r *Reducer) Apply(ev showdown.Event) {
 
 	// ---- damage / status ----
 	case showdown.BattleDamage:
+		holder := e.Tags.Get("of")
+		if holder == "" {
+			holder = e.Target
+		}
+		r.revealEffect(holder, e.Tags.Get("from"))
 		if p := r.State.Find(e.Target); p != nil {
 			beforeHP, beforePct := p.HP, p.HPPercent
 			hadMax := p.MaxHP > 0
@@ -181,6 +206,11 @@ func (r *Reducer) Apply(ev showdown.Event) {
 			r.log("damage", "%s lost %s%s", r.display(p), damageDelta(beforeHP, beforePct, p, hadMax), fromSuffix(e.Tags))
 		}
 	case showdown.BattleHeal:
+		holder := e.Tags.Get("of")
+		if holder == "" {
+			holder = e.Target
+		}
+		r.revealEffect(holder, e.Tags.Get("from"))
 		if p := r.State.Find(e.Target); p != nil {
 			beforeHP, beforePct := p.HP, p.HPPercent
 			hadMax := p.MaxHP > 0
@@ -330,6 +360,8 @@ func (r *Reducer) Apply(ev showdown.Event) {
 	case showdown.BattleItem:
 		if p := r.State.Find(e.Target); p != nil {
 			p.Item = e.Item
+			p.ItemKnown = true
+			p.LastItem = ""
 			r.log("item", "%s revealed its %s!", r.display(p), e.Item)
 		}
 	case showdown.BattleEndItem:
@@ -340,10 +372,13 @@ func (r *Reducer) Apply(ev showdown.Event) {
 				r.log("item", "%s lost its %s!", r.display(p), e.Item)
 			}
 			p.Item = ""
+			p.ItemKnown = true
+			p.LastItem = e.Item
 		}
 	case showdown.BattleAbility:
 		if p := r.State.Find(e.Target); p != nil {
 			p.Ability = e.Ability
+			p.AbilitySuppressed = false
 			if e.From == "" {
 				r.log("ability", "%s's %s!", r.display(p), e.Ability)
 			} else {
@@ -352,7 +387,7 @@ func (r *Reducer) Apply(ev showdown.Event) {
 		}
 	case showdown.BattleEndAbility:
 		if p := r.State.Find(e.Target); p != nil {
-			p.Ability = ""
+			p.AbilitySuppressed = true
 			r.log("ability", "%s's ability was suppressed!", r.display(p))
 		}
 	case showdown.BattleTransform:
@@ -437,7 +472,12 @@ func (r *Reducer) applyEffect(e showdown.BattleEffect) {
 			}
 			return
 		}
-		r.log("effect", "%s activated.", cleanCondition(arg(0)))
+		if effect := arg(1); effect != "" {
+			r.revealEffect(arg(0), effect)
+			r.log("effect", "%s's %s activated!", name(0), effect)
+		} else {
+			r.log("effect", "%s activated.", cleanCondition(arg(0)))
+		}
 	case "terastallize":
 		if p := r.State.Find(arg(0)); p != nil {
 			p.Terastallized = true
@@ -459,7 +499,8 @@ func (r *Reducer) applyEffect(e showdown.BattleEffect) {
 	case "center":
 		r.log("effect", "The Pokémon were centered.")
 	case "block":
-		r.log("effect", "%s's %s blocked it!", name(0), cleanCondition(arg(1)))
+		r.revealEffect(arg(0), arg(1))
+		r.log("effect", "%s's %s blocked it!", name(0), arg(1))
 	case "notarget":
 		r.log("effect", "There was no target...")
 	case "combine":
@@ -581,7 +622,15 @@ func applySwitchRequest(p *Pokemon, sp PokemonSwitchRequest) {
 	}
 	p.setCondition(sp.Condition)
 	p.Item = sp.Item
-	p.Ability = sp.Ability
+	p.ItemKnown = true
+	if sp.Item != "" {
+		p.LastItem = ""
+	}
+	if sp.Ability != "" {
+		p.Ability = sp.Ability
+	} else if p.Ability == "" {
+		p.Ability = sp.BaseAbility
+	}
 	p.BaseAbility = sp.BaseAbility
 	if len(sp.Moves) > 0 {
 		p.MoveIDs = sp.Moves
@@ -626,6 +675,7 @@ func (r *Reducer) switchIn(ident, details, hp, status string, drag bool) {
 		side.Party = append(side.Party, p)
 	}
 	p.SetIdent(ident)
+	p.AbilitySuppressed = false
 	if species != "" {
 		p.Species = species
 	}
@@ -859,7 +909,7 @@ func fromSuffix(tags showdown.Tags) string {
 	if from == "" {
 		return ""
 	}
-	return " [" + cleanCondition(from) + "]"
+	return " [" + from + "]"
 }
 
 var statusNames = map[string]string{
@@ -946,5 +996,21 @@ func conditionEnd(c string) string {
 		return "Gravity returned to normal!"
 	default:
 		return cleanCondition(c) + " ended."
+	}
+}
+
+func (r *Reducer) revealEffect(ident, effect string) {
+	p := r.State.Find(ident)
+	if p == nil {
+		return
+	}
+	if ability, ok := strings.CutPrefix(effect, "ability: "); ok {
+		p.Ability = ability
+		p.AbilitySuppressed = false
+	}
+	if item, ok := strings.CutPrefix(effect, "item: "); ok {
+		p.Item = item
+		p.ItemKnown = true
+		p.LastItem = ""
 	}
 }

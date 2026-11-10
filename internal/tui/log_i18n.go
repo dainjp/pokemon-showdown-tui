@@ -38,7 +38,7 @@ func (bv *battleView) logText(entry battle.LogEntry) string {
 			}
 			translated := bv.name("pokemon", text)
 			for _, side := range []*battle.Side{bv.state().P1, bv.state().P2} {
-				if side == nil {
+				if side == nil || (bv.state().Me != "" && ((prefix == "상대 ") == (side.ID == bv.state().Me))) {
 					continue
 				}
 				for _, pokemon := range side.Party {
@@ -48,6 +48,12 @@ func (bv *battleView) logText(entry battle.LogEntry) string {
 				}
 			}
 			args[i] = prefix + translated
+		} else if category == "effectSuffix" {
+			if effect, ok := strings.CutPrefix(text, " ["); ok {
+				args[i] = " [" + bv.effectName(strings.TrimSuffix(effect, "]")) + "]"
+			}
+		} else if category == "effect" {
+			args[i] = bv.effectName(text)
 		} else if category == "text" {
 			args[i] = bv.tr(text)
 		} else {
@@ -58,6 +64,10 @@ func (bv *battleView) logText(entry battle.LogEntry) string {
 }
 
 var koreanLog = map[string]logTranslation{
+	"%s's %s activated!":            {"%s의 %s 발동!", []string{"pokemon", "effect"}},
+	"%s's %s blocked it!":           {"%s의 %s 때문에 막혔습니다!", []string{"pokemon", "effect"}},
+	"%s's %s blocked %s's %s!":      {"%s의 %s 때문에 %s의 %s 사용이 막혔습니다!", []string{"pokemon", "ability", "pokemon", "move"}},
+	"%s's %s blocked %s!":           {"%s의 %s 때문에 %s 사용이 막혔습니다!", []string{"pokemon", "ability", "move"}},
 	"%s made a substitute!":         {"%s의 대타가 나타났다!", []string{"pokemon"}},
 	"%s's substitute faded!":        {"%s의 대타가 사라졌다!", []string{"pokemon"}},
 	"%s's substitute took the hit!": {"%s의 대타가 공격을 받았다!", []string{"pokemon"}},
@@ -70,11 +80,11 @@ var koreanLog = map[string]logTranslation{
 	"%s used %s!":                   {"%s의 %s!", []string{"pokemon", "move"}},
 	"%s changed forme to %s!":       {"%s의 모습이 %s(으)로 바뀌었습니다!", []string{"pokemon", "pokemon"}},
 	"%s was revealed to be %s!":     {"%s의 정체는 %s!", []string{"pokemon", "pokemon"}},
-	"%s can't use %s! (%s)":         {"%s은(는) %s을(를) 쓸 수 없습니다! (%s)", []string{"pokemon", "move", "text"}},
-	"%s can't move! (%s)":           {"%s은(는) 움직일 수 없습니다! (%s)", []string{"pokemon", "text"}},
+	"%s can't use %s! (%s)":         {"%s의 %s 사용 불가! (%s)", []string{"pokemon", "move", "effect"}},
+	"%s can't move! (%s)":           {"%s 행동 불가! (%s)", []string{"pokemon", "effect"}},
 	"%s fainted!":                   {"%s은(는) 쓰러졌습니다!", []string{"pokemon"}},
-	"%s lost %s%s":                  {"%s의 HP 감소: %s%s", []string{"pokemon"}},
-	"%s restored %s%s":              {"%s의 HP 회복: %s%s", []string{"pokemon"}},
+	"%s lost %s%s":                  {"%s의 HP 감소: %s%s", []string{"pokemon", "", "effectSuffix"}},
+	"%s restored %s%s":              {"%s의 HP 회복: %s%s", []string{"pokemon", "", "effectSuffix"}},
 	"%s was %s!":                    {"%s의 상태: %s!", []string{"pokemon", "text"}},
 	"%s recovered from %s.":         {"%s의 %s 상태가 나았습니다.", []string{"pokemon", "text"}},
 	"A bell chimed and cured the team's status conditions.": {"방울 소리로 팀의 상태이상이 나았습니다.", nil},
@@ -118,4 +128,21 @@ var koreanLog = map[string]logTranslation{
 	"%s was sent out!":                          {"%s이(가) 나왔습니다!", []string{"pokemon"}},
 	"Go! %s!":                                   {"가랏! %s!", []string{"pokemon"}},
 	"%s sent out %s!":                           {"%s은(는) %s을(를) 내보냈습니다!", []string{"", "pokemon"}},
+}
+
+// Effect prefixes identify the catalogue; they must not be passed to ToID
+// together with the name (ability: Queenly Majesty is not an ability ID).
+func (bv *battleView) effectName(effect string) string {
+	for _, category := range []string{"ability", "move", "item"} {
+		if name, ok := strings.CutPrefix(effect, category+": "); ok {
+			return bv.tr(category+": ") + bv.name(category, name)
+		}
+	}
+	// Some causes (for example Stealth Rock) arrive without a prefix.
+	for _, category := range []string{"ability", "item", "move"} {
+		if translated := bv.name(category, effect); translated != effect {
+			return translated
+		}
+	}
+	return bv.tr(effect)
 }

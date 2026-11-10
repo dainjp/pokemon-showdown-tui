@@ -364,6 +364,8 @@ type BattleCant struct {
 	User   string
 	Reason string
 	Move   string
+	// Of identifies the blocked attacker for priority-blocking abilities.
+	Of string
 }
 
 // BattleFaint reports a fainted Pokémon.

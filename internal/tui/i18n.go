@@ -118,6 +118,13 @@ func (m *Model) formatLabel(f showdown.Format) string {
 }
 
 var koreanUI = map[string]string{
+	"After boosts": "랭크 반영",
+	"  Boosts only; item, ability, status and field modifiers excluded.": "  랭크만 반영. 도구·특성·상태이상·필드 보정은 미포함.",
+	"brn": "화상", "psn": "독", "tox": "맹독",
+	"Ability: ": "특성: ", "Item: ": "도구: ", "None": "없음", " removed)": " 소모·제거됨)", " (suppressed)": " (무효화)",
+	"PgUp/PgDn scroll · ↑/↓ Pokémon · Esc close": "PgUp/PgDn 스크롤 · ↑/↓ 포켓몬 · Esc 닫기",
+	"ability: ": "특성: ", "move: ": "기술: ", "item: ": "도구: ",
+	"slp": "잠듦", "par": "마비", "frz": "얼음", "flinch": "풀죽음", "recharge": "반동으로 쉬는 중", "nopp": "PP 부족",
 	"  [enter] rematch ":       "  [enter] 재대결: ",
 	"Sending choice…":          "선택 전송 중…",
 	"Could not send command: ": "명령 전송 실패: ",

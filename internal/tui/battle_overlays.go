@@ -85,6 +85,11 @@ func (bv *battleView) overlayFrame(title string, width int, body []string) strin
 	if maxBody < 4 {
 		maxBody = 4
 	}
+	if bv.overlay == overlayInspect {
+		bv.inspectScroll = clamp(bv.inspectScroll, 0, max(0, len(body)-maxBody))
+		end := min(len(body), bv.inspectScroll+maxBody)
+		body = body[bv.inspectScroll:end]
+	}
 	if len(body) > maxBody {
 		trimmed := append([]string{}, body[:maxBody-1]...)
 		trimmed = append(trimmed, bv.theme.Dim.Render(
@@ -95,7 +100,11 @@ func (bv *battleView) overlayFrame(title string, width int, body []string) strin
 	head := t.Title.Render(title)
 	lines := []string{head, ""}
 	lines = append(lines, body...)
-	lines = append(lines, "", t.Dim.Render(bv.tr("esc close")))
+	hint := bv.tr("esc close")
+	if bv.overlay == overlayInspect {
+		hint = bv.tr("PgUp/PgDn scroll · ↑/↓ Pokémon · Esc close")
+	}
+	lines = append(lines, "", t.Dim.Render(truncate(hint, inner-4)))
 	content := strings.Join(lines, "\n")
 	return t.BoxFocus.Width(inner).Padding(0, 2).Render(content)
 }
@@ -216,6 +225,7 @@ func benchOf(side *battle.Side) []*battle.Pokemon {
 // selection; otherwise the overlay jumps to that Pokémon. back is the overlay
 // to restore when inspect closes (overlayNone for the global inspect key).
 func (bv *battleView) inspectPokemon(p *battle.Pokemon, back overlayKind) {
+	bv.inspectScroll = 0
 	bv.inspectBack = back
 	bv.overlay = overlayInspect
 	if p == nil {
@@ -268,13 +278,9 @@ func (bv *battleView) renderInspectOverlay(width int) string {
 	if b := bv.boostText(p); b != "" {
 		body = append(body, bv.tr("Boosts   ")+b)
 	}
-	if p.Item != "" {
-		body = append(body, bv.tr("Item     ")+t.Muted.Render(bv.name("item", p.Item)))
-	} else if !mine {
-		body = append(body, bv.tr("Item     ")+t.Dim.Render(bv.tr("? (not revealed)")))
-	}
-	if p.Ability != "" {
-		body = append(body, bv.tr("Ability  ")+t.Muted.Render(bv.name("ability", p.Ability)))
+	body = append(body, bv.tr("Item     ")+t.Muted.Render(bv.itemLabel(p)))
+	if p.Ability != "" || p.AbilitySuppressed || (mine && p.BaseAbility != "") {
+		body = append(body, bv.tr("Ability  ")+t.Muted.Render(bv.abilityLabel(p)))
 	} else if !mine {
 		if poss := bv.possibleAbilities(p.Species); poss != "" {
 			body = append(body, bv.tr("Ability  ")+t.Muted.Render("?")+" ("+poss+")")
@@ -340,7 +346,7 @@ func (bv *battleView) renderStatTable(p *battle.Pokemon, mine bool) []string {
 		return bv.renderFoeStatTable(p, base)
 	}
 
-	head := "  " + padRight(bv.tr("Stat"), 8) + " " + padLeft(bv.tr("Base"), 5) + " " + padLeft(bv.tr("Actual"), 7) + " " + padLeft(bv.tr("In battle"), 11)
+	head := "  " + padRight(bv.tr("Stat"), 8) + " " + padLeft(bv.tr("Base"), 5) + " " + padLeft(bv.tr("Actual"), 7) + " " + padLeft(bv.tr("After boosts"), 11)
 	out := []string{t.Muted.Render(head)}
 
 	for _, k := range battle.StatKeys {
@@ -372,7 +378,7 @@ func (bv *battleView) renderStatTable(p *battle.Pokemon, mine bool) []string {
 		case p.Stats[k] > 0:
 			v := p.Stats[k]
 			if n := p.Boosts[k]; n != 0 {
-				eff := int(float64(v)*battle.BoostMultiplier(n) + 0.5)
+				eff := int(float64(v) * battle.BoostMultiplier(n))
 				text := fmt.Sprintf("%d %+d", eff, n)
 				if n > 0 {
 					effective = t.Success.Render(text)
@@ -389,6 +395,7 @@ func (bv *battleView) renderStatTable(p *battle.Pokemon, mine bool) []string {
 		out = append(out, "  "+padRight(label, 8)+" "+
 			padLeft(baseVal, 5)+" "+padLeft(actual, 7)+" "+padLeft(effective, 11))
 	}
+	out = append(out, t.Dim.Render(bv.tr("  Boosts only; item, ability, status and field modifiers excluded.")))
 	return out
 }
 

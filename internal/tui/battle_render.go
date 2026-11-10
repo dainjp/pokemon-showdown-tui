@@ -285,10 +285,10 @@ func (bv *battleView) renderField(width int, layout LayoutMode) []string {
 	} else {
 		// Narrow layouts: one line per active Pokémon, opponent first.
 		for _, p := range activeOf(s.Opponent()) {
-			out = append(out, bv.renderMonLine(p, true, width, layout))
+			out = append(out, bv.renderMonLine(p, true, width, layout), bv.pokemonDetails(p, width))
 		}
 		for _, p := range activeOf(s.MySide()) {
-			out = append(out, bv.renderMonLine(p, false, width, layout))
+			out = append(out, bv.renderMonLine(p, false, width, layout), bv.pokemonDetails(p, width))
 		}
 	}
 
@@ -365,10 +365,7 @@ func (bv *battleView) renderPokemonInfo(p *battle.Pokemon, width int, foe bool, 
 	if p.Terastallized {
 		line2 += "  " + t.Primary.Render(bv.tr("tera:")+bv.name("type", p.TeraType))
 	}
-	if !foe && p.Item != "" {
-		line2 += "  " + t.Muted.Render(bv.name("item", p.Item))
-	}
-	return title + "\n" + line2
+	return truncate(title, width) + "\n" + truncate(line2, width) + "\n" + bv.pokemonDetails(p, width)
 }
 
 // renderMonLine is the narrow layout: everything important on one line.
@@ -1145,4 +1142,36 @@ func padLeft(s string, n int) string {
 		return s
 	}
 	return strings.Repeat(" ", n-w) + s
+}
+
+func (bv *battleView) itemLabel(p *battle.Pokemon) string {
+	if p.Item != "" {
+		return bv.name("item", p.Item)
+	}
+	if p.LastItem != "" {
+		return bv.tr("None") + " (" + bv.name("item", p.LastItem) + bv.tr(" removed)")
+	}
+	if p.ItemKnown {
+		return bv.tr("None")
+	}
+	return bv.tr("? (not revealed)")
+}
+
+func (bv *battleView) abilityLabel(p *battle.Pokemon) string {
+	name := p.Ability
+	if name == "" && bv.isMine(p) {
+		name = p.BaseAbility
+	}
+	label := bv.tr("? (not revealed)")
+	if name != "" {
+		label = bv.name("ability", name)
+	}
+	if p.AbilitySuppressed {
+		label += bv.tr(" (suppressed)")
+	}
+	return label
+}
+
+func (bv *battleView) pokemonDetails(p *battle.Pokemon, width int) string {
+	return bv.theme.Muted.Render(truncate(bv.tr("Ability: ")+bv.abilityLabel(p)+" · "+bv.tr("Item: ")+bv.itemLabel(p), width))
 }
