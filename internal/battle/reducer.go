@@ -172,7 +172,6 @@ func (r *Reducer) Apply(ev showdown.Event) {
 			} else {
 				r.log("cant", "%s's %s blocked %s!", name, ability, e.Move)
 			}
-			break
 		default:
 			if e.Move != "" {
 				r.log("cant", "%s can't use %s! (%s)", name, e.Move, e.Reason)

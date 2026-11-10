@@ -7,17 +7,17 @@
 
 ## 1. 내 PC용 파일 받기
 
-[v0.3.0-ko.2 다운로드 페이지](https://github.com/dainjp/pokemon-showdown-tui/releases/tag/v0.3.0-ko.2)의
+[v0.3.0-ko.3 다운로드 페이지](https://github.com/dainjp/pokemon-showdown-tui/releases/tag/v0.3.0-ko.3)의
 **Assets**에서 아래 파일을 받으세요. Go나 Git 설치는 필요하지 않습니다.
 이 저장소는 비공개이므로 접근 권한이 있는 GitHub 계정으로 로그인해야 합니다.
 
 | PC | 받을 파일 |
 | --- | --- |
-| Windows x64 (일반 Intel/AMD PC) | `pokemon-showdown-tui_0.3.0-ko.2_windows_amd64.zip` |
-| Mac Apple Silicon (M1 이후) | `pokemon-showdown-tui_0.3.0-ko.2_darwin_arm64.tar.gz` |
-| Mac Intel | `pokemon-showdown-tui_0.3.0-ko.2_darwin_amd64.tar.gz` |
-| Linux x64 | `pokemon-showdown-tui_0.3.0-ko.2_linux_amd64.tar.gz` |
-| Linux ARM64 | `pokemon-showdown-tui_0.3.0-ko.2_linux_arm64.tar.gz` |
+| Windows x64 (일반 Intel/AMD PC) | `pokemon-showdown-tui_0.3.0-ko.3_windows_amd64.zip` |
+| Mac Apple Silicon (M1 이후) | `pokemon-showdown-tui_0.3.0-ko.3_darwin_arm64.tar.gz` |
+| Mac Intel | `pokemon-showdown-tui_0.3.0-ko.3_darwin_amd64.tar.gz` |
+| Linux x64 | `pokemon-showdown-tui_0.3.0-ko.3_linux_amd64.tar.gz` |
+| Linux ARM64 | `pokemon-showdown-tui_0.3.0-ko.3_linux_arm64.tar.gz` |
 
 Windows ARM64 전용 빌드는 제공하지 않습니다. `Source code` 파일은 개발용 소스이며
 바로 실행하는 프로그램이 아닙니다. Mac 종류는 Apple 메뉴 → **이 Mac에 관하여**에서 확인합니다.
